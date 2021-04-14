@@ -62,6 +62,11 @@ class Debugger(object):
       self.focal_length = 721.5377
       self.W = 1242
       self.H = 375
+    elif num_class == 2 or dataset == 'airsim_camera':
+      self.names = airsim_camera_class_name
+      # self.focal_length = 
+      self.W = 800
+      self.H = 450
     num_classes = len(self.names)
     self.down_ratio=down_ratio
     # for bird view
@@ -455,6 +460,8 @@ coco_class_name = [
      'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
      'scissors', 'teddy bear', 'hair drier', 'toothbrush'
 ]
+
+airsim_camera_class_name = ['car', 'car_overlook']
 
 color_list = np.array(
         [

@@ -26,7 +26,8 @@ def demo(opt):
     detector.pause = False
     while True:
         _, img = cam.read()
-        cv2.imshow('input', img)
+        # cv2.imshow('input', img)
+        cv2.imwrite('/DB/rhome/shaohengfang/model/CenterNet/images/output/test.jpg', img)
         ret = detector.run(img)
         time_str = ''
         for stat in time_stats:

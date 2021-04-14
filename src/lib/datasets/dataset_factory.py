@@ -17,7 +17,8 @@ dataset_factory = {
   'coco': COCO,
   'pascal': PascalVOC,
   'kitti': KITTI,
-  'coco_hp': COCOHP
+  'coco_hp': COCOHP,
+  'airsim_camera': AIRSIMCAM
 }
 
 _sample_factory = {
