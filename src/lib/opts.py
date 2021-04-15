@@ -13,7 +13,7 @@ class opts(object):
         # basic experiment setting
         self.parser.add_argument('task', default='ctdet',
                                  help='ctdet | ddd | multi_pose | exdet')
-        self.parser.add_argument('--dataset', default='coco',
+        self.parser.add_argument('--dataset', default='airsim_camera',
                                  help='coco | kitti | coco_hp | pascal | airsim_camera')
         self.parser.add_argument('--exp_id', default='default')
         self.parser.add_argument('--test', action='store_true')
@@ -336,7 +336,7 @@ class opts(object):
 
     def init(self, args=''):
         default_dataset_info = {
-            'ctdet': {'default_resolution': [512, 512], 'num_classes': 2,
+            'ctdet': {'default_resolution': [450, 800], 'num_classes': 2,
                       'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
                       'dataset': 'airsim_camera'},
             'exdet': {'default_resolution': [512, 512], 'num_classes': 80,

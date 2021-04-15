@@ -128,7 +128,8 @@ def get_2d_bounding_box(cords):
 
 
 def convert_coco():
-    data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
+    # data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
+    data_dir = '/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_demo'
     DEBUG = False
     nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
 
@@ -226,13 +227,15 @@ def convert_coco():
                 cur_sample_token = cur_sample['next']
         print("# images: ", len(ret['images']))
         print("# annotations: ", len(ret['annotations']))
-        out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
+        # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
+        out_path = '/DB/rhome/shaohengfang/model/CenterNet/data/airsim_camera/annotations/{}_instances.json'.format(split)
         json.dump(ret, open(out_path, 'w'))
 
 
 def visualize_image_with_bbox():
     coco_ = coco.COCO('C:\\Users\\35387\\Desktop\\airsim_camera_demo\\airsim_instances_train.json')
     dataset_dir = "C:\\Users\\35387\\Desktop\\airsim_camera_demo\\"
+    # dataset_dir = "/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_demo"
     catIds = coco_.getCatIds()
     imgIds = coco_.getImgIds()
     for i in range(20):
