@@ -63,7 +63,7 @@ class Debugger(object):
             self.focal_length = 721.5377
             self.W = 1242
             self.H = 375
-        elif num_class == 2 or dataset == 'airsim_camera':
+        elif num_classes == 2 or dataset == 'airsim_camera':
             self.names = airsim_camera_class_name
             self.focal_length = 400
             self.W = 800

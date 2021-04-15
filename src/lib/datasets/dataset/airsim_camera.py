@@ -13,7 +13,7 @@ import torch.utils.data as data
 
 class AIRSIMCAM(data.Dataset):
     num_classes = 2
-    default_resolution = [450, 800]
+    default_resolution = [448, 800]
     mean = np.array([0.40789654, 0.44719302, 0.47026115],
                     dtype=np.float32).reshape(1, 1, 3)
     std = np.array([0.28863828, 0.27408164, 0.27809835],
@@ -25,14 +25,14 @@ class AIRSIMCAM(data.Dataset):
         self.img_dir = os.path.join(self.data_dir, 'images')
         if split == 'val':
             self.annot_path = os.path.join(
-                self.data_dir, 'annotations', 'val_instances.json')
+                self.data_dir, 'annotations', 'train_instances.json')
         else:
             if opt.task == 'exdet':
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations', 'train_instances.json')
             if split == 'test':
                 self.annot_path = os.path.join(
-                    self.data_dir, 'annotations', 'test_instances.json')
+                    self.data_dir, 'annotations', 'train_instances.json')
             else:
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations', 'train_instances.json')
@@ -57,7 +57,7 @@ class AIRSIMCAM(data.Dataset):
         self.split = split
         self.opt = opt
 
-        print('==> initializing food {} data.'.format(split))
+        print('==> initializing airsim_camera {} data.'.format(split))
         self.coco = coco.COCO(self.annot_path)
         self.images = self.coco.getImgIds()
         self.num_samples = len(self.images)
@@ -74,10 +74,14 @@ class AIRSIMCAM(data.Dataset):
             for cls_ind in all_bboxes[image_id]:
                 category_id = self._valid_ids[cls_ind - 1]
                 for bbox in all_bboxes[image_id][cls_ind]:
+                    # print(bbox)
+                    # print(type(bbox))
+                    # print(bbox[0])
                     bbox[2] -= bbox[0]
                     bbox[3] -= bbox[1]
                     score = bbox[4]
-                    bbox_out = list(map(self._to_float, bbox[0:4]))
+                    # bbox_out = list(map(self._to_float, list(bbox[0:4])))
+                    bbox_out = [float("{:.2f}".format(bbox[i])) for i in range(4)]
 
                     detection = {
                         "image_id": int(image_id),
