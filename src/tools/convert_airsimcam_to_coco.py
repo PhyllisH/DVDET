@@ -232,26 +232,5 @@ def convert_coco():
         json.dump(ret, open(out_path, 'w'))
 
 
-def visualize_image_with_bbox():
-    coco_ = coco.COCO('C:\\Users\\35387\\Desktop\\airsim_camera_demo\\airsim_instances_train.json')
-    dataset_dir = "C:\\Users\\35387\\Desktop\\airsim_camera_demo\\"
-    # dataset_dir = "/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_demo"
-    catIds = coco_.getCatIds()
-    imgIds = coco_.getImgIds()
-    for i in range(20):
-        img = coco_.loadImgs(imgIds[i])[0]
-        annIds = coco_.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)
-        annos = coco_.loadAnns(annIds)
-
-        image = cv2.imread(os.path.join(dataset_dir,  img['file_name']))
-
-        for anno in annos:
-            bbox = anno['bbox']
-            x, y, w, h = bbox
-            anno_image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 255), 2)
-            cv2.imshow('demo', anno_image)
-        cv2.waitKey()
-
-
 if __name__ == '__main__':
     convert_coco()
