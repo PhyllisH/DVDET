@@ -14,9 +14,9 @@ import torch.utils.data as data
 class AIRSIMCAM(data.Dataset):
     num_classes = 2
     default_resolution = [448, 800]
-    mean = np.array([0.40789654, 0.44719302, 0.47026115],
+    mean = np.array([0.58375601, 0.54399371, 0.47015152],
                     dtype=np.float32).reshape(1, 1, 3)
-    std = np.array([0.28863828, 0.27408164, 0.27809835],
+    std = np.array([0.25869511, 0.24342069, 0.23500774],
                    dtype=np.float32).reshape(1, 1, 3)
 
     def __init__(self, opt, split):
@@ -25,14 +25,14 @@ class AIRSIMCAM(data.Dataset):
         self.img_dir = os.path.join(self.data_dir, 'images')
         if split == 'val':
             self.annot_path = os.path.join(
-                self.data_dir, 'annotations', 'train_instances.json')
+                self.data_dir, 'annotations', 'val_instances.json')
         else:
             if opt.task == 'exdet':
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations', 'train_instances.json')
             if split == 'test':
                 self.annot_path = os.path.join(
-                    self.data_dir, 'annotations', 'train_instances.json')
+                    self.data_dir, 'annotations', 'val_instances.json')
             else:
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations', 'train_instances.json')

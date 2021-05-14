@@ -20,7 +20,7 @@ from nuscenes.utils.data_classes import LidarPointCloud, RadarPointCloud, Box
 from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 'scene_5',
-               'scene_6', 'scene_7', 'scene_8', 'scene_9', 'scene_11', 'scene_12',
+               'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
                'scene_13', 'scene_14', 'scene_16', 'scene_17', 'scene_18', 'scene_19',
                'scene_20', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_26',
                'scene_28', 'scene_29', 'scene_30', 'scene_31', 'scene_32', 'scene_33',
@@ -37,7 +37,7 @@ train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 'scene_5',
                'scene_108', 'scene_109', 'scene_110', 'scene_111', 'scene_112', 'scene_113',
                'scene_114', 'scene_116', 'scene_118', 'scene_119']
 
-val_split = ['scene_10', 'scene_15', 'scene_25', 'scene_27', 'scene_41', 'scene_43',
+val_split = ['scene_7', 'scene_15', 'scene_25', 'scene_27', 'scene_41', 'scene_43',
              'scene_54', 'scene_58', 'scene_59', 'scene_60', 'scene_64', 'scene_74',
              'scene_85', 'scene_86', 'scene_89', 'scene_91', 'scene_93', 'scene_96',
              'scene_115', 'scene_117']
@@ -129,7 +129,7 @@ def get_2d_bounding_box(cords):
 
 def convert_coco():
     # data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
-    data_dir = '/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_demo'
+    data_dir = '/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_10scene'
     DEBUG = False
     nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
 
