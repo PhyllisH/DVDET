@@ -19,8 +19,9 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 
 def visualize_image_with_bbox():
-    coco_ = coco.COCO('C:\\Users\\35387\\Desktop\\airsim_camera_demo\\airsim_instances_train.json')
-    dataset_dir = "C:\\Users\\35387\\Desktop\\airsim_camera_demo\\"
+    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
+    coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
+    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
     # dataset_dir = "/DB/rhome/shaohengfang/datasets/airsim/airsim_camera_demo"
     catIds = coco_.getCatIds()
     imgIds = coco_.getImgIds()
@@ -40,16 +41,25 @@ def visualize_image_with_bbox():
 
 
 def visualize_result():
-    coco_ = coco.COCO('C:\\Users\\35387\\Desktop\\airsim_camera_demo\\airsim_instances_train.json')
-    dataset_dir = "C:\\Users\\35387\\Desktop\\airsim_camera_demo\\"
+    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
+    coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
+    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
     catIds = coco_.getCatIds()
     imgIds = coco_.getImgIds()
 
     # resFile
-    result_path = "C:\\Users\\35387\\Desktop\\results.json"
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/ctdet/coco_dla/results.json')
     res_annos_all = json.load(open(result_path))
 
-    for img_id in range(1, 100):
+    # save path
+    save_path = os.path.join(os.path.dirname(result_path), 'vis')
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    
+    # import ipdb; ipdb.set_trace()
+
+    # for img_id in range(1, 100):
+    for img_id in imgIds[:100]:
         img = coco_.loadImgs(img_id)[0]
         annIds = coco_.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)
         annos = coco_.loadAnns(annIds)
@@ -60,16 +70,18 @@ def visualize_result():
         for anno in annos:
             bbox = anno['bbox']
             x, y, w, h = bbox
-            anno_image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 255, 255), 1)
-            cv2.imshow('demo', anno_image)
+            anno_image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (127, 255, 0), 1.5)
+            # cv2.imshow('demo', anno_image)
+            # cv2.imwrite('{}/{}_gt.png'.format(save_path, img_id), anno_image)
         for anno in res_annos:
             if anno['score'] > 0.5:
                 bbox = anno['bbox']
                 x, y, w, h = bbox
                 anno_image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), (0, 0, 255), 1)
-                cv2.imshow('demo', anno_image)
+                # cv2.imshow('demo', anno_image)
+                cv2.imwrite('{}/{}_pred.png'.format(save_path, img_id), anno_image)
 
-        cv2.waitKey()
+        # cv2.waitKey()
 
 
 if __name__ == '__main__':

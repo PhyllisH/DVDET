@@ -34,7 +34,7 @@ class CTDetDataset(data.Dataset):
         ann_ids = self.coco.getAnnIds(imgIds=[img_id])
         anns = self.coco.loadAnns(ids=ann_ids)
         num_objs = min(len(anns), self.max_objs)
-
+        # print('image path: ', img_path)
         img = cv2.imread(img_path)
 
         height, width = img.shape[0], img.shape[1]

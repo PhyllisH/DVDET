@@ -21,8 +21,10 @@ class AIRSIMCAM(data.Dataset):
 
     def __init__(self, opt, split):
         super(AIRSIMCAM, self).__init__()
-        self.data_dir = os.path.join(opt.data_dir, 'airsim_camera')
-        self.img_dir = os.path.join(self.data_dir, 'images')
+        self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
+        # print('Data dir: {}'.format(self.data_dir))
+        # self.img_dir = os.path.join(self.data_dir, 'images')
+        self.img_dir = self.data_dir
         if split == 'val':
             self.annot_path = os.path.join(
                 self.data_dir, 'annotations', 'val_instances.json')
