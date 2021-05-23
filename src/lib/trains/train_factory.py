@@ -12,4 +12,5 @@ train_factory = {
     'ddd': DddTrainer,
     'ctdet': CtdetTrainer,
     'multi_pose': MultiPoseTrainer,
+    'multiagent_det': CtdetTrainer,
 }

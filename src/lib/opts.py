@@ -13,8 +13,8 @@ class opts(object):
         # basic experiment setting
         self.parser.add_argument('task', default='ctdet',
                                  help='ctdet | ddd | multi_pose | exdet')
-        self.parser.add_argument('--dataset', default='airsim_camera',
-                                 help='coco | kitti | coco_hp | pascal | airsim_camera')
+        self.parser.add_argument('--dataset', default='multiagent_airsim_camera',
+                                 help='coco | kitti | coco_hp | pascal | airsim_camera | multiagent_airsim_camera')
         self.parser.add_argument('--exp_id', default='default')
         self.parser.add_argument('--test', action='store_true')
         self.parser.add_argument('--debug', type=int, default=0,
@@ -59,7 +59,7 @@ class opts(object):
                                  choices=['white', 'black'])
 
         # model
-        self.parser.add_argument('--arch', default='dla_34',
+        self.parser.add_argument('--arch', default='multiagentdla_34',
                                  help='model architecture. Currently tested'
                                       'res_18 | res_101 | resdcn_18 | resdcn_101 |'
                                       'dlav0_34 | dla_34 | hourglass')
@@ -225,6 +225,10 @@ class opts(object):
         self.parser.add_argument('--eval_oracle_dep', action='store_true',
                                  help='use ground truth depth.')
 
+        # coord mode
+        self.parser.add_argument('--coord_mode', default='local',
+                                 help='local | global')
+
     def parse(self, args=''):
         if args == '':
             opt = self.parser.parse_args()
@@ -319,6 +323,12 @@ class opts(object):
                          'wh': 2 if not opt.cat_spec_wh else 2 * opt.num_classes}
             if opt.reg_offset:
                 opt.heads.update({'reg': 2})
+        elif opt.task == 'multiagent_det':
+            # assert opt.dataset in ['pascal', 'coco']
+            opt.heads = {'hm': opt.num_classes,
+                         'wh': 2 if not opt.cat_spec_wh else 2 * opt.num_classes}
+            if opt.reg_offset:
+                opt.heads.update({'reg': 2})
         elif opt.task == 'multi_pose':
             # assert opt.dataset in ['coco_hp']
             opt.flip_idx = dataset.flip_idx
@@ -339,6 +349,9 @@ class opts(object):
             'ctdet': {'default_resolution': [448, 800], 'num_classes': 2,
                       'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
                       'dataset': 'airsim_camera'},
+            'multiagent_det': {'default_resolution': [448, 800], 'num_classes': 2,
+                      'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
+                      'dataset': 'multiagent_airsim_camera'},
             'exdet': {'default_resolution': [512, 512], 'num_classes': 80,
                       'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
                       'dataset': 'coco'},
