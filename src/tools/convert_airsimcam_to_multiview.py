@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-22 23:10:26
+LastEditTime: 2021-05-25 11:14:06
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -32,17 +32,21 @@ sys.path.append(os.path.dirname(__file__))
 from transformation import *
 
 '''
-GT sample: [{
+GT:
+'samples': [{
     'SENSOR': 
         {
-            'trans_mat': # the UAV coordinate
+            'trans_mat': (3, 4) # the UAV coordinate transform matrix
             'image':  # the RGB image
-            'image_g': # the RGB image in global coords
+            'image_id': # the image id
             'vehicles_i': (n, 4), np.array # the box in current coordinate (2D)
             'vehicles_g': (n, 4), np.array # the box in global coordinate (2D)
+            'category_id': (n,), # the box category
         },
     'vehicles_s': (n, 4), np.array # all the boxes in the global coordinate (2D)
-}]
+}],
+'images': []
+'annos': []
 
 And COCO Annotation Format: single-view in image or global coordinates
 
@@ -52,7 +56,7 @@ Single view (local coords):
     Item:
         Training:
             image: [1, C, H, W] # UAV image
-            transform_matrix: [1, 2, 3] # UAV coordinate
+            trans_mats: [1, 3, 4] # UAV coordinate
             boxes: [1, MAX_BOXES, 4] # box in current coordinate
         Eval:
             image: [1, C, H, W] # UAV image
@@ -224,6 +228,8 @@ def convert_multiview_coco():
                         # organize sample
                         cur_UAV_sample['image'] = sensor_record['filename']
                         cur_UAV_sample['image_g']= image_g_path
+                        cur_UAV_sample['image_id'] = image_id
+                        cur_UAV_sample['trans_mat'] = np.zeros([3, 4])
                         
                         # vehicle info
                         cat_id = 2 if UAV_cam == 'BOTTOM' else 1
@@ -260,7 +266,7 @@ def convert_multiview_coco():
                                     'ignore': 0,
                                     'segmentation': []}
                             ret_i['annotations'].append(ann)
-                            vehicles_i.append([x, y, w, h])
+                            vehicles_i.append([W - x - w, y, w, h])
                             category_id.append(cat_id)
 
                             x, y, w, h = get_2d_bounding_box(vehicle_cord_[:3, :])
@@ -273,7 +279,7 @@ def convert_multiview_coco():
                                         'ignore': 0,
                                         'segmentation': []}
                             ret_g['annotations'].append(ann_g)
-                            vehicles_g.append([x, y, w, h])
+                            vehicles_g.append([W - x - w, y, w, h])
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
                         cur_UAV_sample['category_id'] = np.array(category_id)

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-23 13:39:53
+LastEditTime: 2021-05-25 15:00:12
 Description: 
 '''
 
@@ -9,10 +9,12 @@ Description:
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+import imp
 
 import os
 import math
 import logging
+import ipdb
 import numpy as np
 from os.path import join
 
@@ -538,7 +540,7 @@ class Sparsemax(nn.Module):
 class km_generator(nn.Module):
     def __init__(self, out_size=128, input_feat_h=14, input_feat_w=25):
         super(km_generator, self).__init__()
-        self.n_feat = int(256 * (input_feat_h//4) * (input_feat_w//4))
+        self.n_feat = int(256 * (input_feat_h//4 + 1) * (input_feat_w//4 + 1))
         self.fc = nn.Sequential(
             nn.Linear(self.n_feat, 256), #            
             nn.ReLU(inplace=True),
@@ -573,7 +575,7 @@ class policy_net4(nn.Module):
 
     def forward(self, images):
         x = self.base(images)
-        _, _, _, _, outputs1 = self.dla_up(x)
+        _, _, _, outputs1 = self.dla_up(x)
         outputs = self.conv1(outputs1)
         outputs = self.conv2(outputs)
         outputs = self.conv3(outputs)
@@ -612,6 +614,7 @@ class MIMOGeneralDotProductAttention(nn.Module):
         # attn_orig = attn_orig/ scaling # (b,5,5)  column: differnt keys and the same query
 
         attn_orig_softmax = self.softmax(attn_orig)  # (b, k_agents, q_agents)
+        # attn_orig_softmax = self.sparsemax(attn_orig)
 
         attn_shape = attn_orig_softmax.shape
         bats, key_num, query_num = attn_shape[0], attn_shape[1], attn_shape[2]
@@ -672,11 +675,13 @@ class DLASeg(nn.Module):
             self.__setattr__(head, fc)
         
         # Message generator
-        self.key_size = 512
-        self.query_size = 8
+        self.key_size = 128
+        self.query_size = 32
+        self.warp_flag = False
+        self.sparse = True
         self.query_key_net = policy_net4(base_name, pretrained, down_ratio, last_level)
-        self.key_net = km_generator(out_size=self.key_size, input_feat_sz=image_size / 32)
-        self.query_net = km_generator(out_size=self.query_size, input_feat_sz=image_size / 32)
+        self.key_net = km_generator(out_size=self.key_size, input_feat_h=448//32, input_feat_w=800//32)
+        self.query_net = km_generator(out_size=self.query_size, input_feat_h=448//32, input_feat_w=800//32)
         self.attention_net = MIMOGeneralDotProductAttention(self.query_size, self.key_size, self.warp_flag)
     
     def get_wrap_feat(self, ori_feat, warp_mat):
@@ -712,19 +717,22 @@ class DLASeg(nn.Module):
         # Message generator (Q, K, V) + Message Fusion
         # 1. Choose the layer
         _, c, h, w = x_3.size()
-        feat_maps = x_3.view(b, num_agents, c, h, w)
+        feat_map = x_3.view(b, num_agents, c, h, w)
         # 2. Get the value mat (trans feature to current agent coord)
         # val_mat: (b, k_agents, q_agents, c, h, w) 
         # trans_mats: a_i to a_j coord
-        val_mat = torch.zeros(b, num_agents, num_agents, feat_maps.size(1), feat_maps.size(2), feat_maps.size(3)).to(feat_maps.device)
-        for b_i in range(b):
-            for a_i in range(num_agents):
-                for a_j in range(num_agents):
-                    if a_j == a_i:
-                        val_mat[b_i, a_i, a_j] = feat_maps[b_i, a_i]
-                    else:
-                        warp_feat = self.get_wrap_feat(feat_maps[b_i, a_i], trans_mats[b_i, a_i, a_j])
-                        val_mat[b_i, a_i, a_j] = warp_feat
+        if self.warp_flag:
+            val_mat = torch.zeros(b, num_agents, num_agents, feat_map.size(1), feat_map.size(2), feat_map.size(3)).to(feat_map.device)
+            for b_i in range(b):
+                for a_i in range(num_agents):
+                    for a_j in range(num_agents):
+                        if a_j == a_i:
+                            val_mat[b_i, a_i, a_j] = feat_map[b_i, a_i]
+                        else:
+                            warp_feat = self.get_wrap_feat(feat_map[b_i, a_i], trans_mats[b_i, a_i, a_j])
+                            val_mat[b_i, a_i, a_j] = warp_feat
+        else:
+            val_mat = feat_map
         # 3. Encode q, k
         # pass feature maps through key and query generator
         query_key_maps = self.query_key_net(images) # (b*num_agents, c, h, w)
@@ -736,6 +744,8 @@ class DLASeg(nn.Module):
         feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat, sparse=self.sparse)    # (b, num_agents, c, h, w)
         # print(query_mat.shape, key_mat.shape, val_mat.shape, feat_fuse.shape)
 
+        # print(prob_action)
+
         # Decoder
         post_commu_feats = feat_fuse.view(b*num_agents, c, h, w)
         x = [x_0, x_1, x_2, post_commu_feats]
@@ -746,7 +756,7 @@ class DLASeg(nn.Module):
 
         z = {}
         for head in self.heads:
-            z[head] = self.__getattr__(head)(y[-1])
+            z[head] = self.__getattr__(head)(y[-1]) # (b*num_agent, 2, 112, 200)
         return [z]
     
 

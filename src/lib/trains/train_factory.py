@@ -6,11 +6,12 @@ from .ctdet import CtdetTrainer
 from .ddd import DddTrainer
 from .exdet import ExdetTrainer
 from .multi_pose import MultiPoseTrainer
+from .multiagent_det import MultiAgentDetTrainer
 
 train_factory = {
     'exdet': ExdetTrainer,
     'ddd': DddTrainer,
     'ctdet': CtdetTrainer,
     'multi_pose': MultiPoseTrainer,
-    'multiagent_det': CtdetTrainer,
+    'multiagent_det': MultiAgentDetTrainer,
 }

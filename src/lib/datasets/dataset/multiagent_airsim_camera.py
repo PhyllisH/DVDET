@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-22 22:02:55
+LastEditTime: 2021-05-23 21:00:25
 Description: 
 '''
 from __future__ import absolute_import
@@ -35,16 +35,24 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         if split == 'val':
             self.annot_path = os.path.join(
                 self.data_dir, 'multiagent_annotations', 'val_instances_sample.pkl')
+            self.annot_path_cocoformat = os.path.join(
+                self.data_dir, 'multiagent_annotations', 'val_instances.json')
         else:
             if opt.task == 'exdet':
                 self.annot_path = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
+                self.annot_path_cocoformat = os.path.join(
+                    self.data_dir, 'multiagent_annotations', 'train_instances.json')
             if split == 'test':
                 self.annot_path = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'val_instances.pkl')
+                self.annot_path_cocoformat = os.path.join(
+                    self.data_dir, 'multiagent_annotations', 'val_instances.json')
             else:
                 self.annot_path = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
+                self.annot_path_cocoformat = os.path.join(
+                    self.data_dir, 'multiagent_annotations', 'train_instances.json')
         self.max_objs = 128
         self.class_name = [
             'car', 'car_overlook']
@@ -113,6 +121,7 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         # result_json = os.path.join(save_dir, "results.json")
         # detections  = self.convert_eval_format(results)
         # json.dump(detections, open(result_json, "w"))
+        self.coco = coco.COCO(self.annot_path_cocoformat)
         self.save_results(results, save_dir)
         coco_dets = self.coco.loadRes('{}/results.json'.format(save_dir))
         coco_eval = COCOeval(self.coco, coco_dets, "bbox")

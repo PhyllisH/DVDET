@@ -1,12 +1,13 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-23 10:52:26
+LastEditTime: 2021-05-25 10:33:06
 Description: 
 '''
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from random import randint
 from numpy.lib.type_check import imag
 
 import torch.utils.data as data
@@ -79,11 +80,13 @@ class MultiAgentDetDataset(data.Dataset):
         images = []
         vehicles = []
         category_idx = []
+        cam_id = np.random.randint(low=0, high=5)
         for cam, info in sample.items():
             if cam.startswith('vehicles'):
                 continue
             # else:
-            elif cam.startswith('F'):
+            # elif cam.startswith('F'):
+            elif cam.endswith(str(cam_id)):
                 images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                 vehicles.append(info[vehicles_key])
                 category_idx.append(info['category_id'])
@@ -102,10 +105,13 @@ class MultiAgentDetDataset(data.Dataset):
         cat_spec_wh = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.float32)
         cat_spec_mask = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.uint8)
         aug_imgs = np.zeros((num_images, 3, input_h, input_w), dtype=np.float32)
+        # ----------- TO FIX ------------- #
+        trans_mats = np.zeros((num_images, num_images, 4, 4), dtype=np.float32)
 
         draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else \
             draw_umich_gaussian
 
+        gt_dets = []
         for index, info in enumerate(zip(images, vehicles, category_idx)):
             img, objs, category_ids = info
             if flipped:
@@ -151,14 +157,15 @@ class MultiAgentDetDataset(data.Dataset):
                         draw_dense_reg(dense_wh[index], hm.max(axis=1), ct_int, wh[index, k], radius)
                     cur_gt_det = [ct[0] - w / 2, ct[1] - h / 2,
                                 ct[0] + w / 2, ct[1] + h / 2, 1, cls_id]
-                    if cur_gt_det not in gt_det:
-                        gt_det.append(cur_gt_det)
-        return c, s, aug_imgs, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det
+                    gt_det.append(cur_gt_det)
+            gt_det = np.array(gt_det, dtype=np.float32) if len(gt_det) > 0 else np.zeros((1, 6), dtype=np.float32)
+            gt_dets.append(gt_det)
+        return c, s, aug_imgs, trans_mats, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        c, s, aug_imgs, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample)
-        ret = {'input': aug_imgs, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh}
+        c, s, aug_imgs, trans_mats, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample)
+        ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)
             dense_wh_mask = np.concatenate([hm_a, hm_a], axis=1)
@@ -170,8 +177,7 @@ class MultiAgentDetDataset(data.Dataset):
         if self.opt.reg_offset:
             ret.update({'reg': reg})
         if self.opt.debug > 0 or not self.split == 'train':
-            gt_det = np.array(gt_det, dtype=np.float32) if len(gt_det) > 0 else \
-                np.zeros((1, 6), dtype=np.float32)
+            gt_det = gt_det if len(gt_det) > 0 else [np.zeros((1, 6), dtype=np.float32)]
             meta = {'c': c, 's': s, 'gt_det': gt_det, 'sample_id': index}
             ret['meta'] = meta
         return ret
