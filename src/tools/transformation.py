@@ -55,36 +55,19 @@ def get_vehicle_coord(anno_data):
 
     # cords the bounding box of a vehicle
     cords = np.zeros((8, 4))
-    cords[0, :] = np.array([size[0] / 2, size[1] / 2, -size[2] / 2, 1])
-    cords[1, :] = np.array([-size[0] / 2, size[1] / 2, -size[2] / 2, 1])
+    cords[0, :] = np.array([ size[0] / 2,  size[1] / 2, -size[2] / 2, 1])
+    cords[1, :] = np.array([-size[0] / 2,  size[1] / 2, -size[2] / 2, 1])
     cords[2, :] = np.array([-size[0] / 2, -size[1] / 2, -size[2] / 2, 1])
-    cords[3, :] = np.array([size[0] / 2, -size[1] / 2, -size[2] / 2, 1])
-    cords[4, :] = np.array([size[0] / 2, size[1] / 2, size[2] / 2, 1])
-    cords[5, :] = np.array([-size[0] / 2, size[1] / 2, size[2] / 2, 1])
-    cords[6, :] = np.array([-size[0] / 2, -size[1] / 2, size[2] / 2, 1])
-    cords[7, :] = np.array([size[0] / 2, -size[1] / 2, size[2] / 2, 1])
+    cords[3, :] = np.array([ size[0] / 2, -size[1] / 2, -size[2] / 2, 1])
+    cords[4, :] = np.array([ size[0] / 2,  size[1] / 2,  size[2] / 2, 1])
+    cords[5, :] = np.array([-size[0] / 2,  size[1] / 2,  size[2] / 2, 1])
+    cords[6, :] = np.array([-size[0] / 2, -size[1] / 2,  size[2] / 2, 1])
+    cords[7, :] = np.array([ size[0] / 2, -size[1] / 2,  size[2] / 2, 1])
 
     vehicle_world_matrix = _get_rotation_matrix(translation, rotation)
 
     world_cords = np.dot(vehicle_world_matrix, np.transpose(cords))
     return np.array(world_cords)
-
-
-# def get_2d_bounding_box(cords):
-#     x_min = cords[0, 0]
-#     x_max = cords[0, 0]
-#     y_min = cords[1, 0]
-#     y_max = cords[1, 0]
-#     for i in range(1, 8):
-#         if cords[0, i] < x_min:
-#             x_min = cords[0, i]
-#         if cords[0, i] > x_max:
-#             x_max = cords[0, i]
-#         if cords[1, i] < y_min:
-#             y_min = cords[1, i]
-#         if cords[1, i] > y_max:
-#             y_max = cords[1, i]
-#     return x_min, y_min, x_max - x_min, y_max - y_min
 
 def get_2d_bounding_box(cords):
     """
@@ -161,3 +144,23 @@ def image_points_to_global(image_points, translation, rotation, camera_intrinsic
     restore_global = im_position + np.dot(mat, image_points) * d
 
     return restore_global
+
+
+def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worldgrid2worldcoord_mat):
+    im_position = tranlation.copy()
+    im_position[2] = - im_position[2]
+    im_position = np.array(im_position).reshape((3, 1))
+    im_rotation = rotation.copy()
+    im_rotation[3] = - im_rotation[3]
+    im_rotation = Quaternion(im_rotation)
+    reverse_matrix = np.eye(3)
+    reverse_matrix[0, 0] = -1
+
+    mat = reverse_matrix @ Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T
+    extrinsic_mat = np.hstack((im_rotation.rotation_matrix, - im_rotation.rotation_matrix @ im_position))
+    extrinsic_mat = np.delete(extrinsic_mat, 2, 1)
+    project_mat = camera_intrinsic @ mat @ extrinsic_mat
+    project_mat = project_mat @ worldgrid2worldcoord_mat
+    project_mat = np.linalg.inv(project_mat)
+    return project_mat
+

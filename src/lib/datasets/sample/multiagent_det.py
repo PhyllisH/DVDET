@@ -1,14 +1,14 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-25 10:33:06
+LastEditTime: 2021-05-30 15:09:00
 Description: 
 '''
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from random import randint
-from numpy.lib.type_check import imag
+from itertools import count
+import random
 
 import torch.utils.data as data
 import numpy as np
@@ -80,16 +80,21 @@ class MultiAgentDetDataset(data.Dataset):
         images = []
         vehicles = []
         category_idx = []
-        cam_id = np.random.randint(low=0, high=5)
+        trans_mats_list = []
+        # cam_id = np.random.randint(low=0, high=5)
+        cam_list = random.sample([x for x in sample.keys() if not x.startswith('vehicles')], 8)
         for cam, info in sample.items():
             if cam.startswith('vehicles'):
                 continue
             # else:
             # elif cam.startswith('F'):
-            elif cam.endswith(str(cam_id)):
+            # elif cam.endswith(str(cam_id)):
+            if cam in cam_list:
                 images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                 vehicles.append(info[vehicles_key])
                 category_idx.append(info['category_id'])
+                trans_mats_list.append(info['trans_mat'] @ np.diag([32, 32, 1]))
+        trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample
         c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w = self.get_aug(height, width)
@@ -105,8 +110,10 @@ class MultiAgentDetDataset(data.Dataset):
         cat_spec_wh = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.float32)
         cat_spec_mask = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.uint8)
         aug_imgs = np.zeros((num_images, 3, input_h, input_w), dtype=np.float32)
-        # ----------- TO FIX ------------- #
-        trans_mats = np.zeros((num_images, num_images, 4, 4), dtype=np.float32)
+        
+        # ----------- TransMat ------------- #
+        trans_mats = np.zeros((num_images, 3, 3), dtype=np.float32)
+        trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
 
         draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else \
             draw_umich_gaussian

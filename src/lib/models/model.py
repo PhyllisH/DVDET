@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from typing import no_type_check
 
 import torchvision.models as models
 import torch
@@ -24,11 +25,14 @@ _model_factory = {
 }
 
 
-def create_model(arch, heads, head_conv):
+def create_model(arch, heads, head_conv, message_mode=0):
     num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0
     arch = arch[:arch.find('_')] if '_' in arch else arch
     get_model = _model_factory[arch]
-    model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv)
+    if arch.startswith('multiagent'):
+        model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv, message_mode=message_mode)
+    else:
+        model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv)
     return model
 
 

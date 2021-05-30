@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-25 11:14:06
+LastEditTime: 2021-05-28 18:39:01
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -21,6 +21,7 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
 import pycocotools.coco as coco
+from tqdm import tqdm
 
 # DATA_PATH = '../../data/kitti/'
 
@@ -30,6 +31,7 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 import sys
 sys.path.append(os.path.dirname(__file__))
 from transformation import *
+from visualize_coco_result import CoordTrans
 
 '''
 GT:
@@ -39,6 +41,8 @@ GT:
             'trans_mat': (3, 4) # the UAV coordinate transform matrix
             'image':  # the RGB image
             'image_id': # the image id
+            'translation':
+            'rotation':
             'vehicles_i': (n, 4), np.array # the box in current coordinate (2D)
             'vehicles_g': (n, 4), np.array # the box in global coordinate (2D)
             'category_id': (n,), # the box category
@@ -151,6 +155,7 @@ def convert_multiview_coco():
     camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
+    worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -200], [0, 0, 1]])
 
     cat_info = []
     for i, cat in enumerate(cats):
@@ -159,9 +164,8 @@ def convert_multiview_coco():
     bbox_id = 0
     for split in splits:
         ret_i = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
-        ret_g = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
         ret_s = {"samples": [], "type": "sample", "categories": cat_info}
-        for scene in nusc.scene:
+        for scene in tqdm(nusc.scene):
             if not scene["name"] in scene_split[split]:
                 continue
             scene_token = scene['token']
@@ -196,6 +200,13 @@ def convert_multiview_coco():
                         sensor = 'CAM_{}_id_{}'.format(UAV_cam, UAV_id)
                         sensor_record = nusc.get("sample_data", sample_data[sensor])
                         calibrated_record = nusc.get("calibrated_sensor", sensor_record["calibrated_sensor_token"])
+
+                        cur_UAV_sample['translation'] = calibrated_record["translation"].copy()
+                        cur_UAV_sample['rotation'] = calibrated_record["rotation"].copy()
+                        cur_UAV_sample['trans_mat'] = get_imgcoord2worldgrid_matrices(calibrated_record["translation"].copy(),
+                                                      calibrated_record["rotation"].copy(),
+                                                      camera_intrinsic,
+                                                      worldgrid2worldcoord_mat)
                         im_position = calibrated_record["translation"]
                         im_position[2] = -im_position[2]
                         im_rotation = calibrated_record["rotation"]
@@ -210,26 +221,32 @@ def convert_multiview_coco():
                         ret_i['images'].append(image_info)
                         # global image
                         # /DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/global_sweeps
-                        # image_g = image_points_to_global()
-                        image_g = np.zeros([H, W, 3], dtype=np.uint8)
+                        # check warp func
+                        # ori_img = cv2.imread(os.path.join('/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene', sensor_record['filename']))
+                        # cv2.imwrite('ori.png', ori_img)
+                        # # vis warp
+                        # image_g = CoordTrans(ori_img.copy(), cur_UAV_sample['translation'], cur_UAV_sample['rotation'])
+                        # cv2.imwrite('img_warp.png', image_g)
+                        # # vis warp back
+                        # img_warp_back = CoordTrans(image_g.copy(), cur_UAV_sample['translation'], cur_UAV_sample['rotation'], 'G2L')
+                        # cv2.imwrite('img_warp_back.png', img_warp_back)
                         # save global image
-                        sensor_g_path = os.path.join(data_dir, 'global_sweeps', sensor)
-                        if not os.path.exists(sensor_g_path):
-                            os.makedirs(sensor_g_path)
-                        image_g_path = os.path.join(sensor_g_path, os.path.basename(sensor_record['filename']))
-                        if not os.path.exists(image_g_path):
-                            cv2.imwrite(image_g_path, image_g)    # BGR
-                        image_g_info = {'file_name': '{}/{}/{}'.format('global_sweeps', sensor, os.path.basename(sensor_record['filename'])),
-                                        'id': image_id,
-                                        'height': H,
-                                        'width': W}
-                        ret_g['images'].append(image_g_info)
+                        # sensor_g_path = os.path.join(data_dir, 'global_sweeps', sensor)
+                        # if not os.path.exists(sensor_g_path):
+                        #     os.makedirs(sensor_g_path)
+                        # image_g_path = os.path.join(sensor_g_path, os.path.basename(sensor_record['filename']))
+                        # if not os.path.exists(image_g_path):
+                        # cv2.imwrite(image_g_path, image_g)    # BGR
+                        # image_g_info = {'file_name': '{}/{}/{}'.format('global_sweeps', sensor, os.path.basename(sensor_record['filename'])),
+                        #                 'id': image_id,
+                        #                 'height': image_g.shape[0],
+                        #                 'width': image_g.shape[1]}
+                        # ret_g['images'].append(image_g_info)
 
                         # organize sample
                         cur_UAV_sample['image'] = sensor_record['filename']
-                        cur_UAV_sample['image_g']= image_g_path
+                        # cur_UAV_sample['image_g']= image_g_path
                         cur_UAV_sample['image_id'] = image_id
-                        cur_UAV_sample['trans_mat'] = np.zeros([3, 4])
                         
                         # vehicle info
                         cat_id = 2 if UAV_cam == 'BOTTOM' else 1
@@ -270,15 +287,6 @@ def convert_multiview_coco():
                             category_id.append(cat_id)
 
                             x, y, w, h = get_2d_bounding_box(vehicle_cord_[:3, :])
-                            ann_g = {   'area': w * h,
-                                        'iscrowd': 0,
-                                        'image_id': image_id,
-                                        'bbox': [W - x - w, y, w, h],
-                                        'category_id': cat_id,
-                                        'id': bbox_id,
-                                        'ignore': 0,
-                                        'segmentation': []}
-                            ret_g['annotations'].append(ann_g)
                             vehicles_g.append([W - x - w, y, w, h])
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
@@ -293,10 +301,9 @@ def convert_multiview_coco():
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
         out_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances.json'.format(split)
-        out_global_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances_global.json'.format(split)
+        # out_global_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances_global.json'.format(split)
         out_sample_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances_sample.pkl'.format(split)
         json.dump(ret_i, open(out_path, 'w'))
-        json.dump(ret_g, open(out_global_path, 'w'))
         pkl.dump(ret_s, open(out_sample_path, 'wb')) 
 
 if __name__ == '__main__':

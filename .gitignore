@@ -1,3 +1,4 @@
+*.png
 legacy/*
 .DS_Store
 debug/*

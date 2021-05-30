@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-25 13:50:24
+LastEditTime: 2021-05-30 15:10:03
 Description: 
 '''
 from __future__ import absolute_import
@@ -17,6 +17,7 @@ import numpy as np
 import time
 from progress.bar import Bar
 import torch
+import random
 
 from external.nms import soft_nms
 from opts import opts
@@ -34,21 +35,24 @@ class PrefetchDataset(torch.utils.data.Dataset):
         self.opt = opt
     
     def load_image_func(self, index):
-        sample_id = index // 5
-        cam_id = index % 5
+        sample_id = index // 25
+        cam_id = index % 25
         images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
         images = []
         trans_mat_list = []
         image_idx = []
+        cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
+        cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], 7) + [cams_list[cam_id]]
         for cam, info in self.samples[sample_id].items():
             if cam.startswith('vehicles'):
                 continue
             # else:
             # elif cam.startswith('F'):
-            elif cam.endswith(str(cam_id)):
+            # elif cam.endswith(str(cam_id)):
+            if cam in cam_list:
                 images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                 image_idx.append(info['image_id'])
-                trans_mat_list.append(info['trans_mat'])
+                trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32) @ np.diag([32, 32, 1]))
         # trans_mats = []
         # for trans_mat_i in trans_mat_list:
         #     trans_mats.append([])
@@ -56,7 +60,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
         #         trans_mats[-1].append((trans_mat_i.T*trans_mat_j)[None,:])
         #     trans_mats[-1] = np.concatenate(trans_mats[-1], axis=0)[None,:]
         # trans_mats = np.concatenate(trans_mats, axis=0)
-        trans_mats = np.zeros([len(images), len(images), 4, 4])
+        # trans_mats = np.zeros([len(images), len(images), 4, 4])
+        trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
         return images, image_idx, trans_mats
 
     def __getitem__(self, index):
@@ -72,7 +77,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
         return image_idx, {'images': scaled_images, 'image': images, 'meta': meta, 'trans_mats': trans_mats}
 
     def __len__(self):
-        return len(self.samples)*5
+        return len(self.samples)*25
 
 
 def prefetch_test(opt):

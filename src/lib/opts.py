@@ -228,6 +228,12 @@ class opts(object):
         # coord mode
         self.parser.add_argument('--coord_mode', default='local',
                                  help='local | global')
+        self.parser.add_argument('--message_mode', default='NO_MESSAGE',
+                                 help=' NO_MESSAGE: no mesage ;  \
+                                        SINGLE_GLOBAL_MESSAGE: max in global coord [then warp to each uav coord]; \
+                                        GLOBAL_MESSAGE:: passing in global coord [then warp to each uav coord]; \
+                                        LOCAL_MESSAGE:: passing in uav coord [no warp]; \
+                                        LOCAL_MESSAGE_NOWARP: passing in uav coord [warp]')
 
     def parse(self, args=''):
         if args == '':
