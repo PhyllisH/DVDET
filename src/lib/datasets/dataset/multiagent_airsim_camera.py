@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-23 21:00:25
+LastEditTime: 2021-06-12 18:04:49
 Description: 
 '''
 from __future__ import absolute_import
@@ -78,6 +78,18 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         self.samples = pkl.load(open(self.annot_path, 'rb'))['samples']
         self.num_samples = len(self.samples)
         print('Loaded {} {} samples'.format(split, self.num_samples))
+        if 'NO_MESSAGE' in opt.message_mode:
+            self.num_agents = 1
+            samples = []
+            for sample in self.samples:
+                for k, data in sample.items():
+                    if k.startswith('vehicles'):
+                        continue
+                    samples.append(data)
+            self.samples = samples
+            self.num_samples = len(self.samples)
+        else:
+            self.num_agents = 8
 
     def _to_float(x):
         return float("{:.2f}".format(x))

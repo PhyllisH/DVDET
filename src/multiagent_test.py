@@ -1,12 +1,14 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-30 15:10:03
+LastEditTime: 2021-06-12 19:20:28
 Description: 
 '''
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
+from torch._C import dtype
 
 import _init_paths
 
@@ -52,20 +54,26 @@ class PrefetchDataset(torch.utils.data.Dataset):
             if cam in cam_list:
                 images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                 image_idx.append(info['image_id'])
-                trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32) @ np.diag([32, 32, 1]))
-        # trans_mats = []
-        # for trans_mat_i in trans_mat_list:
-        #     trans_mats.append([])
-        #     for trans_mat_j in trans_mat_list:
-        #         trans_mats[-1].append((trans_mat_i.T*trans_mat_j)[None,:])
-        #     trans_mats[-1] = np.concatenate(trans_mats[-1], axis=0)[None,:]
-        # trans_mats = np.concatenate(trans_mats, axis=0)
-        # trans_mats = np.zeros([len(images), len(images), 4, 4])
+                trans_mat_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ np.array(info['trans_mat'], dtype=np.float32) @ np.array(np.diag([32, 32, 1]), dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
+        return images, image_idx, trans_mats
+    
+    def load_sample_func(self, index):
+        info = self.samples[index]
+        images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
+        images = []
+        image_idx = []
+        images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+        image_idx.append(info['image_id'])
+        trans_mats = (np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ np.array(info['trans_mat'], dtype=np.float32) @ np.array(np.diag([32, 32, 1]), dtype=np.float32))[None,:,:]
         return images, image_idx, trans_mats
 
     def __getitem__(self, index):
-        images, image_idx, trans_mats = self.load_image_func(index)
+        if 'NO_MESSAGE' in self.opt.message_mode:
+            images, image_idx, trans_mats = self.load_sample_func(index)
+        else:
+            images, image_idx, trans_mats = self.load_image_func(index)
+        
         scaled_images, meta = {}, {}
         for scale in opt.test_scales:
             cur_images = []
@@ -77,7 +85,10 @@ class PrefetchDataset(torch.utils.data.Dataset):
         return image_idx, {'images': scaled_images, 'image': images, 'meta': meta, 'trans_mats': trans_mats}
 
     def __len__(self):
-        return len(self.samples)*25
+        if 'NO_MESSAGE' in self.opt.message_mode:
+            return len(self.samples)
+        else:
+            return len(self.samples)*25
 
 
 def prefetch_test(opt):
@@ -86,6 +97,7 @@ def prefetch_test(opt):
     Dataset = dataset_factory[opt.dataset]
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
     print(opt)
+    print('Message mode: {}'.format(opt.message_mode))
     Logger(opt)
     Detector = detector_factory[opt.task]
 

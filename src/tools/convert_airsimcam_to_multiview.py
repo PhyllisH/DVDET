@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-28 18:39:01
+LastEditTime: 2021-06-10 21:10:30
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -155,7 +155,7 @@ def convert_multiview_coco():
     camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
-    worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -200], [0, 0, 1]])
+    worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -200], [0, 0, 1]])
 
     cat_info = []
     for i, cat in enumerate(cats):

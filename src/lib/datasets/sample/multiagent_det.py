@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-30 15:09:00
+LastEditTime: 2021-06-12 17:52:22
 Description: 
 '''
 from __future__ import absolute_import
@@ -73,7 +73,7 @@ class MultiAgentDetDataset(data.Dataset):
         
         return c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w
 
-    def load_sample(self, sample):
+    def load_sample(self, sample, num_images=8):
         images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
         vehicles_key = 'vehicles_i' if self.opt.coord_mode == 'local' else 'vehicles_g'
         
@@ -81,25 +81,30 @@ class MultiAgentDetDataset(data.Dataset):
         vehicles = []
         category_idx = []
         trans_mats_list = []
-        # cam_id = np.random.randint(low=0, high=5)
-        cam_list = random.sample([x for x in sample.keys() if not x.startswith('vehicles')], 8)
-        for cam, info in sample.items():
-            if cam.startswith('vehicles'):
-                continue
-            # else:
-            # elif cam.startswith('F'):
-            # elif cam.endswith(str(cam_id)):
-            if cam in cam_list:
-                images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
-                vehicles.append(info[vehicles_key])
-                category_idx.append(info['category_id'])
-                trans_mats_list.append(info['trans_mat'] @ np.diag([32, 32, 1]))
+        if num_images == 1:
+            images.append(cv2.imread(os.path.join(self.img_dir, sample[images_key])))
+            vehicles.append(sample[vehicles_key])
+            category_idx.append(sample['category_id'])
+            trans_mats_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ sample['trans_mat'] @ np.diag([32, 32, 1]))
+        else:
+            # cam_id = np.random.randint(low=0, high=5)
+            cam_list = random.sample([x for x in sample.keys() if not x.startswith('vehicles')], num_images)
+            for cam, info in sample.items():
+                if cam.startswith('vehicles'):
+                    continue
+                # else:
+                # elif cam.startswith('F'):
+                # elif cam.endswith(str(cam_id)):
+                if cam in cam_list:
+                    images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+                    vehicles.append(info[vehicles_key])
+                    category_idx.append(info['category_id'])
+                    trans_mats_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ info['trans_mat'] @ np.diag([32, 32, 1]))
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample
         c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w = self.get_aug(height, width)
 
-        num_images = len(images)
         num_classes = self.num_classes
         hm = np.zeros((num_images, num_classes, output_h, output_w), dtype=np.float32)
         wh = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
@@ -171,7 +176,7 @@ class MultiAgentDetDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        c, s, aug_imgs, trans_mats, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample)
+        c, s, aug_imgs, trans_mats, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, num_images=self.num_agents)
         ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)

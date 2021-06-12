@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-30 16:39:18
+LastEditTime: 2021-06-12 18:04:03
 Description: 
 '''
 
@@ -21,6 +21,7 @@ from os.path import join
 
 import torch
 from torch import nn
+from torch._C import device
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import kornia
@@ -575,7 +576,9 @@ class policy_net4(nn.Module):
         self.conv4 = conv2DBatchNormRelu(256, 256, k_size=3, stride=1, padding=1)
         self.conv5 = conv2DBatchNormRelu(256, 256, k_size=3, stride=2, padding=1)
 
-    def forward(self, images):
+    def forward(self, images, trans_mats):
+        trans_mats_q = torch.Tensor(np.diag([500/28, 500/50, 1])).to(trans_mats.device) @ trans_mats @ torch.Tensor(np.diag([1/32, 1/32, 1])).to(trans_mats.device)
+        images = kornia.warp_perspective(images, trans_mats_q, dsize=(images.shape[-2], images.shape[-1]))
         x = self.base(images)
         _, _, _, outputs1 = self.dla_up(x)
         outputs = self.conv1(outputs1)
@@ -680,14 +683,67 @@ class DLASeg(nn.Module):
         self.key_size = 128
         self.query_size = 32
         self.message_mode = message_mode
-        self.warp_flag = False if self.message_mode in ['LOCAL_MESSAGE_NOWARP'] else True
         if self.message_mode in ['LOCAL_MESSAGE_NOWARP', 'GLOBAL_MESSAGE', 'LOCAL_MESSAGE']:
             self.query_key_net = policy_net4(base_name, pretrained, down_ratio, last_level)
             self.key_net = km_generator(out_size=self.key_size, input_feat_h=448//32, input_feat_w=800//32)
             self.query_net = km_generator(out_size=self.query_size, input_feat_h=448//32, input_feat_w=800//32)
-            self.attention_net = MIMOGeneralDotProductAttention(self.query_size, self.key_size, self.warp_flag)
+            warp_flag = False if self.message_mode in ['LOCAL_MESSAGE_NOWARP'] else True
+            self.attention_net = MIMOGeneralDotProductAttention(self.query_size, self.key_size, warp_flag)
+    
+    def NO_MESSAGE_NOWARP(self, images):
+        b, num_agents, img_c, img_h, img_w = images.size()
+        images = images.view(b*num_agents, img_c, img_h, img_w)
+        # Encoder
+        x = self.base(images)
+        x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+        return [x_0, x_1, x_2, x_3]
+    
+    def NO_MESSAGE(self, images, trans_mats):
+        b, num_agents, img_c, img_h, img_w = images.size()
+        images = images.view(b*num_agents, img_c, img_h, img_w)
+        # Encoder
+        x = self.base(images)
+        x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+        
+        # 1. Choose the layer
+        feat_map = x_3
+        _, c, h, w = feat_map.size()
 
-    def forward(self, images, trans_mats):
+        # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+        # uav_i --> global coord
+        trans_mats = trans_mats.view(b*num_agents, 3, 3)
+        trans_mats = torch.Tensor(np.diag([1/2, 1/2, 1])).to(trans_mats.device) @ trans_mats
+        global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
+        
+        # 3. Return fused feat
+        # global coord --> uav_j   
+        trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().view(b*num_agents, 3, 3).contiguous()
+        post_commu_feats = kornia.warp_perspective(global_feat, trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
+        return [x_0, x_1, x_2, post_commu_feats]
+    
+    def LOCAL_MESSAGE_NOWARP(self, images):
+        b, num_agents, img_c, img_h, img_w = images.size()
+        images = images.view(b*num_agents, img_c, img_h, img_w)
+        # Encoder
+        x = self.base(images)
+        x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+        # 1. Choose the layer
+        feat_map = x_3
+        _, c, h, w = feat_map.size()
+        # 2. Get the value mat (In each uav coord)
+        val_mat = feat_map.view(b, num_agents, c, h, w).contiguous()
+        # 3. Encode q, k (In each uav coord)
+        query_key_maps = self.query_key_net(images) # (b*num_agents, c, h, w)
+        querys = self.query_net(query_key_maps) # (b*num_agents, query_size)
+        keys = self.key_net(query_key_maps) # (b*num_agents, key_size)
+        query_mat = querys.view(b, num_agents, self.query_size) # (b, num_agents, query_size)
+        key_mat = keys.view(b, num_agents, self.key_size) # (b, num_agents, key_size)
+        feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat)    # (b, num_agents, c, h, w)
+        # 4. Return fused feat
+        post_commu_feats = feat_fuse.view(b*num_agents, c, h, w)
+        return [x_0, x_1, x_2, post_commu_feats]
+    
+    def LOCAL_MESSAGE(self, images, trans_mats):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
 
@@ -695,53 +751,107 @@ class DLASeg(nn.Module):
         x = self.base(images)
         x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        if self.message_mode == 'NO_MESSAGE':
-            post_commu_feats = x_3
-        else:
-            # 1. Choose the layer
-            feat_map = x_3
-            _, c, h, w = feat_map.size()
-            
-            # 2. Get the value mat (trans feature to current agent coord)
-            # uav_i --> global coord --> uav_j # val_mat: (b, k_agents, q_agents, c, h, w)  # trans_mats: a_i to a_j coord
-            if self.message_mode == 'LOCAL_MESSAGE_NOWARP':
-                val_mat = feat_map.view(b, num_agents, c, h, w).contiguous()
-            elif self.message_mode in ['SINGLE_GLOBAL_MESSAGE', 'GLOBAL_MESSAGE', 'LOCAL_MESSAGE']:
-                trans_mats = trans_mats.view(b*num_agents, 3, 3)
-                global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
-                global_feat = global_feat.view(b, num_agents, c, h, w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
-                if self.message_mode == 'LOCAL_MESSAGE':
-                    global_feat = global_feat.contiguous().view(b*num_agents*num_agents, c, h, w).contiguous()
-                    trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()
-                    val_mat = kornia.warp_perspective(global_feat, trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
-                    val_mat = val_mat.view(b, num_agents, num_agents, c, h, w).contiguous()
-                else:
-                    val_mat = global_feat
-                
-            # 3. Encode q, k
-            if self.message_mode == 'SINGLE_GLOBAL_MESSAGE':
-                feat_fuse = val_mat.max(dim=1)[0]
-            elif self.message_mode in ['GLOBAL_MESSAGE', 'LOCAL_MESSAGE']:
-                # pass feature maps through key and query generator
-                query_key_maps = self.query_key_net(images) # (b*num_agents, c, h, w)
-                query_key_maps = kornia.warp_perspective(query_key_maps, trans_mats, dsize=(query_key_maps.shape[-2], query_key_maps.shape[-1])) # (b*num_agents, c, h, w)
-                querys = self.query_net(query_key_maps) # (b*num_agents, query_size)
-                keys = self.key_net(query_key_maps) # (b*num_agents, key_size)
-                query_mat = querys.view(b, num_agents, self.query_size) # (b, num_agents, query_size)
-                key_mat = keys.view(b, num_agents, self.key_size) # (b, num_agents, key_size)
+        # 1. Choose the layer
+        feat_map = x_3
+        _, c, h, w = feat_map.size()
 
-                feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat)    # (b, num_agents, c, h, w)
-                # print(query_mat.shape, key_mat.shape, val_mat.shape, feat_fuse.shape)
-                # print(prob_action)
-            
-            # 4. Trans back to uav coord
-            if self.message_mode in ['SINGLE_GLOBAL_MESSAGE', 'GLOBAL_MESSAGE']:
-                trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().view(b*num_agents, 3, 3).contiguous()
-                post_commu_feats = kornia.warp_perspective(feat_fuse.view(b*num_agents, c, feat_fuse.shape[-2], feat_fuse.shape[-1]).contiguous(), trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
-            else:
-                post_commu_feats = feat_fuse.view(b*num_agents, c, h, w)
+        # 2. Get the value mat (trans feature to current agent coord) # val_mat: (b, k_agents, q_agents, c, h, w)
+        # uav_i --> global coord 
+        trans_mats = trans_mats.view(b*num_agents, 3, 3)
+        global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(2*h, 2*w)) # (b*num_agents, c, h, w)
+        global_feat = global_feat.view(b, num_agents, c, 2*h, 2*w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
+        global_feat = global_feat.contiguous().view(b*num_agents*num_agents, c, 2*h, 2*w).contiguous()
+        # global coord --> uav_j   
+        trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()
+        val_mat = kornia.warp_perspective(global_feat, trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
+        val_mat = val_mat.view(b, num_agents, num_agents, c, h, w).contiguous()
+        # 3. Encode q, k (in global coord)
+        query_key_maps = self.query_key_net(images, trans_mats) # (b*num_agents, c, h, w)
+        # print(query_key_maps.nonzero()[:,0].unique())
+        querys = self.query_net(query_key_maps) # (b*num_agents, query_size)
+        keys = self.key_net(query_key_maps) # (b*num_agents, key_size)
+        query_mat = querys.view(b, num_agents, self.query_size) # (b, num_agents, query_size)
+        key_mat = keys.view(b, num_agents, self.key_size) # (b, num_agents, key_size)
+        feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat)    # (b, num_agents, c, h, w)
+        # print(prob_action)
+        # 4. Return fused feat
+        post_commu_feats = feat_fuse.view(b*num_agents, c, h, w)
+        return [x_0, x_1, x_2, post_commu_feats]
+    
+    def GLOBAL_MESSAGE(self, images, trans_mats):
+        b, num_agents, img_c, img_h, img_w = images.size()
+        images = images.view(b*num_agents, img_c, img_h, img_w)
 
-        x = [x_0, x_1, x_2, post_commu_feats]
+        # Encoder
+        x = self.base(images)
+        x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+
+        # 1. Choose the layer
+        feat_map = x_3
+        _, c, h, w = feat_map.size()
+
+        # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+        # uav_i --> global coord
+        trans_mats = trans_mats.view(b*num_agents, 3, 3)
+        trans_mats = torch.Tensor(np.diag([1/2, 1/2, 1])).to(trans_mats.device) @ trans_mats
+        global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
+        val_mat = global_feat.view(b, num_agents, c, h, w).contiguous()
+        # 3. Encode q, k (in global coord)
+        query_key_maps = self.query_key_net(images, trans_mats) # (b*num_agents, c, h, w)
+        querys = self.query_net(query_key_maps) # (b*num_agents, query_size)
+        keys = self.key_net(query_key_maps) # (b*num_agents, key_size)
+        query_mat = querys.view(b, num_agents, self.query_size) # (b, num_agents, query_size)
+        key_mat = keys.view(b, num_agents, self.key_size) # (b, num_agents, key_size)
+        feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat)    # (b, num_agents, c, h, w)
+        # print(prob_action)
+        # 4. Return fused feat
+        # global coord --> uav_j   
+        trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().view(b*num_agents, 3, 3).contiguous()
+        post_commu_feats = kornia.warp_perspective(feat_fuse.view(b*num_agents, c, h, w).contiguous(), trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
+        return [x_0, x_1, x_2, post_commu_feats]
+    
+    def SINGLE_GLOBAL_MESSAGE(self, images, trans_mats):
+        b, num_agents, img_c, img_h, img_w = images.size()
+        images = images.view(b*num_agents, img_c, img_h, img_w)
+
+        # Encoder
+        x = self.base(images)
+        x_0, x_1, x_2, x_3 = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+
+        # 1. Choose the layer
+        feat_map = x_3
+        _, c, h, w = feat_map.size()
+
+        # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+        # uav_i --> global coord
+        trans_mats = trans_mats.view(b*num_agents, 3, 3)
+        trans_mats = torch.Tensor(np.diag([1/2, 1/2, 1])).to(trans_mats.device) @ trans_mats
+        global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
+        val_mat = global_feat.view(b, num_agents, c, h, w).contiguous()
+        # 3. Encode message (in global coord)
+        feat_fuse = val_mat.max(dim=1)[0].unsqueeze(1)
+        feat_fuse = feat_fuse.expand(-1, num_agents, -1, -1, -1).contiguous().view(b*num_agents, c, h, w).contiguous()
+        # 4. Return fused feat
+        # global coord --> uav_j 
+        trans_mats_inverse = torch.inverse(trans_mats).view(b, num_agents, 3, 3).contiguous().view(b*num_agents, 3, 3).contiguous()
+        feat_fuse = kornia.warp_perspective(feat_fuse.view(b*num_agents, c, h, w).contiguous(), trans_mats_inverse, dsize=(h, w)) # (b*num_agents, c, h, w)
+        post_commu_feats = feat_map + feat_fuse
+        return [x_0, x_1, x_2, post_commu_feats]
+
+    def forward(self, images, trans_mats):
+        if self.message_mode == 'NO_MESSAGE_NOWARP':
+            x = self.NO_MESSAGE_NOWARP(images)
+        elif self.message_mode == 'NO_MESSAGE':
+            x = self.NO_MESSAGE(images, trans_mats)
+        elif self.message_mode == 'LOCAL_MESSAGE_NOWARP':
+            x = self.LOCAL_MESSAGE_NOWARP(images)
+        elif self.message_mode == 'LOCAL_MESSAGE':
+            x = self.LOCAL_MESSAGE(images, trans_mats)
+        elif self.message_mode == 'GLOBAL_MESSAGE':
+            x = self.GLOBAL_MESSAGE(images, trans_mats)
+        elif self.message_mode == 'SINGLE_GLOBAL_MESSAGE':
+            x = self.SINGLE_GLOBAL_MESSAGE(images, trans_mats)
+
         y = []
         for i in range(self.last_level - self.first_level):
             y.append(x[i].clone())
@@ -753,7 +863,7 @@ class DLASeg(nn.Module):
         return [z]
     
 
-def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE'):
+def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP'):
     model = DLASeg('dla{}'.format(num_layers), heads,
                     pretrained=True,
                     down_ratio=down_ratio,

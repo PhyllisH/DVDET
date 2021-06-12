@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-30 10:13:33
+LastEditTime: 2021-06-02 12:05:32
 Description: 
 '''
 from __future__ import absolute_import
@@ -130,7 +130,8 @@ def visualize_result():
 
     # resFile
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/ctdet/coco_dla/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent/results.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_SINGLE_GLOBAL_MESSAGE/results.json')
     res_annos_all = json.load(open(result_path))
 
     # save path
