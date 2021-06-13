@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-12 17:52:22
+LastEditTime: 2021-06-13 15:40:48
 Description: 
 '''
 from __future__ import absolute_import
@@ -85,7 +85,7 @@ class MultiAgentDetDataset(data.Dataset):
             images.append(cv2.imread(os.path.join(self.img_dir, sample[images_key])))
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
-            trans_mats_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ sample['trans_mat'] @ np.diag([32, 32, 1]))
+            trans_mats_list.append(sample['trans_mat'])
         else:
             # cam_id = np.random.randint(low=0, high=5)
             cam_list = random.sample([x for x in sample.keys() if not x.startswith('vehicles')], num_images)
@@ -99,7 +99,7 @@ class MultiAgentDetDataset(data.Dataset):
                     images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                     vehicles.append(info[vehicles_key])
                     category_idx.append(info['category_id'])
-                    trans_mats_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ info['trans_mat'] @ np.diag([32, 32, 1]))
+                    trans_mats_list.append(info['trans_mat'])
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample

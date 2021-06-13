@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-12 19:20:28
+LastEditTime: 2021-06-13 15:41:33
 Description: 
 '''
 from __future__ import absolute_import
@@ -54,7 +54,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
             if cam in cam_list:
                 images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
                 image_idx.append(info['image_id'])
-                trans_mat_list.append(np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ np.array(info['trans_mat'], dtype=np.float32) @ np.array(np.diag([32, 32, 1]), dtype=np.float32))
+                trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
         return images, image_idx, trans_mats
     
@@ -65,7 +65,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
         image_idx = []
         images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
         image_idx.append(info['image_id'])
-        trans_mats = (np.array(np.diag([28/400, 50/500, 1]), dtype=np.float32) @ np.array(info['trans_mat'], dtype=np.float32) @ np.array(np.diag([32, 32, 1]), dtype=np.float32))[None,:,:]
+        trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]
         return images, image_idx, trans_mats
 
     def __getitem__(self, index):

@@ -234,6 +234,8 @@ class opts(object):
                                         GLOBAL_MESSAGE:: passing in global coord [then warp to each uav coord]; \
                                         LOCAL_MESSAGE:: passing in uav coord [no warp]; \
                                         LOCAL_MESSAGE_NOWARP: passing in uav coord [warp]')
+        self.parser.add_argument('--trans_layer', default=[3], nargs='+', type=int,
+                                 help='feature transform layer (range from 0 to 3), larger --> deeper')
 
     def parse(self, args=''):
         if args == '':
