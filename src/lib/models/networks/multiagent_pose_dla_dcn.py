@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-13 21:16:12
+LastEditTime: 2021-06-13 21:48:43
 Description: 
 '''
 
@@ -702,10 +702,20 @@ class DLASeg(nn.Module):
     def NO_MESSAGE(self, images, trans_mats):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
+
+        if len(self.trans_layer) == 1 and self.trans_layer[-1] == -1:
+            trans_mats = trans_mats.view(b*num_agents, 3, 3)
+            map_zoom_mats = torch.Tensor(np.array(np.diag([img_h/400, img_w/500, 1]), dtype=np.float32)).to(trans_mats.device)
+            trans_mats = map_zoom_mats @ trans_mats
+            images = kornia.warp_perspective(images, trans_mats, dsize=(img_h, img_w))
+        
         # Encoder
         x = self.base(images)
         x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
         
+        if len(self.trans_layer) == 1 and self.trans_layer[-1] == -1:
+            return x
+
         # 1. Choose the layer
         for c_layer in self.trans_layer:
             feat_map = x[c_layer]
@@ -715,7 +725,7 @@ class DLASeg(nn.Module):
             # uav_i --> global coord
             trans_mats = trans_mats.view(b*num_agents, 3, 3)
             map_zoom_mats = torch.Tensor(np.array(np.diag([h/400, w/500, 1]), dtype=np.float32)).to(trans_mats.device)
-            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**c_layer, 2**c_layer, 1]), dtype=np.float32)).to(trans_mats.device)
+            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+1), 2**(c_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
             trans_mats = map_zoom_mats @ trans_mats @ feat_zoom_mats
             global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
             
@@ -726,7 +736,6 @@ class DLASeg(nn.Module):
             x[c_layer] = post_commu_feats
         return x
 
-    
     def LOCAL_MESSAGE_NOWARP(self, images):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
@@ -768,7 +777,7 @@ class DLASeg(nn.Module):
         # uav_i --> global coord 
         trans_mats = trans_mats.view(b*num_agents, 3, 3)
         map_zoom_mats = torch.Tensor(np.array(np.diag([h*2/400, w*2/500, 1]), dtype=np.float32)).to(trans_mats.device)
-        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**trans_layer, 2**trans_layer, 1]), dtype=np.float32)).to(trans_mats.device)
+        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(trans_layer+2), 2**(trans_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
         trans_mats = map_zoom_mats @ trans_mats @ feat_zoom_mats
         global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(2*h, 2*w)) # (b*num_agents, c, h, w)
         global_feat = global_feat.view(b, num_agents, c, 2*h, 2*w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
@@ -808,7 +817,7 @@ class DLASeg(nn.Module):
         # uav_i --> global coord
         trans_mats = trans_mats.view(b*num_agents, 3, 3)
         map_zoom_mats = torch.Tensor(np.array(np.diag([h/400, w/500, 1]), dtype=np.float32)).to(trans_mats.device)
-        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**trans_layer, 2**trans_layer, 1]), dtype=np.float32)).to(trans_mats.device)
+        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(trans_layer+2), 2**(trans_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
         trans_mats = map_zoom_mats @ trans_mats @ feat_zoom_mats
         global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
         val_mat = global_feat.view(b, num_agents, c, h, w).contiguous()
@@ -844,7 +853,7 @@ class DLASeg(nn.Module):
         # uav_i --> global coord
         trans_mats = trans_mats.view(b*num_agents, 3, 3)
         map_zoom_mats = torch.Tensor(np.array(np.diag([h/400, w/500, 1]), dtype=np.float32)).to(trans_mats.device)
-        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**trans_layer, 2**trans_layer, 1]), dtype=np.float32)).to(trans_mats.device)
+        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(trans_layer+2), 2**(trans_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
         trans_mats = map_zoom_mats @ trans_mats @ feat_zoom_mats
         global_feat = kornia.warp_perspective(feat_map, trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
         val_mat = global_feat.view(b, num_agents, c, h, w).contiguous()
@@ -882,7 +891,6 @@ class DLASeg(nn.Module):
         for head in self.heads:
             z[head] = self.__getattr__(head)(y[-1]) # (b*num_agent, 2, 112, 200)
         return [z]
-    
 
 def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3]):
     model = DLASeg('dla{}'.format(num_layers), heads,
