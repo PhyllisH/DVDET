@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-13 15:41:33
+LastEditTime: 2021-06-21 14:55:57
 Description: 
 '''
 from __future__ import absolute_import
@@ -44,7 +44,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
         trans_mat_list = []
         image_idx = []
         cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
-        cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], 7) + [cams_list[cam_id]]
+        cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
         for cam, info in self.samples[sample_id].items():
             if cam.startswith('vehicles'):
                 continue

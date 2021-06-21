@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-10 21:10:30
+LastEditTime: 2021-06-21 22:23:07
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -155,7 +155,7 @@ def convert_multiview_coco():
     camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
-    worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -200], [0, 0, 1]])
+    # worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -250], [0, 0, 1]])
 
     cat_info = []
     for i, cat in enumerate(cats):
@@ -203,10 +203,9 @@ def convert_multiview_coco():
 
                         cur_UAV_sample['translation'] = calibrated_record["translation"].copy()
                         cur_UAV_sample['rotation'] = calibrated_record["rotation"].copy()
-                        cur_UAV_sample['trans_mat'] = get_imgcoord2worldgrid_matrices(calibrated_record["translation"].copy(),
+                        cur_UAV_sample['trans_mat'] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                       calibrated_record["rotation"].copy(),
-                                                      camera_intrinsic,
-                                                      worldgrid2worldcoord_mat)
+                                                      camera_intrinsic)
                         im_position = calibrated_record["translation"]
                         im_position[2] = -im_position[2]
                         im_rotation = calibrated_record["rotation"]
@@ -255,39 +254,33 @@ def convert_multiview_coco():
                         category_id = []
                         for vehicle_cord in vehicle_cords:
                             # get bbox from vehicle_cord
-                            vehicle_cord_ = np.array(vehicle_cord)
-                            vehicle_cord_ = vehicle_cord_[:3, :]
-                            for j in range(3):
-                                vehicle_cord_[j, :] = vehicle_cord_[j, :] - im_position[j]
-                            vehicle_cord_[:3, :] = np.dot(im_rotation.rotation_matrix, vehicle_cord_[:3, :])
-                            vehicle_cord_[:3, :] = np.dot(Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T,
-                                                        vehicle_cord_[:3, :])
-                            # Check depth
-                            flag = False if min(vehicle_cord_[2, :]) < 0 else True
-                            if not flag:
+                            vehicle_cord_img = global_points_to_image(vehicle_cord.copy()[:3,], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
+
+                            if vehicle_cord_img.shape[-1] == 0:
                                 continue
-                            vehicle_points = view_points(vehicle_cord_[:3, :], np.array(camera_intrinsic), normalize=True)
-                            x, y, w, h = get_2d_bounding_box(vehicle_points)
+                            x, y, w, h = get_2d_bounding_box(vehicle_cord_img)
                             # Check box
                             if x < 0 or y < 0 or (x + w) > W or (y + h) > H:
-                                flag = False
-                            if not flag:
                                 continue
                             bbox_id += 1
                             ann = { 'area': w * h,
                                     'iscrowd': 0,
                                     'image_id': image_id,
-                                    'bbox': [W - x - w, y, w, h],
+                                    'bbox': [x, y, w, h],
                                     'category_id': cat_id,
                                     'id': bbox_id,
                                     'ignore': 0,
                                     'segmentation': []}
                             ret_i['annotations'].append(ann)
-                            vehicles_i.append([W - x - w, y, w, h])
+                            vehicles_i.append([x, y, w, h])
                             category_id.append(cat_id)
 
-                            x, y, w, h = get_2d_bounding_box(vehicle_cord_[:3, :])
-                            vehicles_g.append([W - x - w, y, w, h])
+                            # img_coords = global_points_to_image(vehicle_cord.copy()[:3], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
+                            # vehicle_cord_r = image_points_to_global(img_coords, cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
+                            # print('Diff: ', np.abs(vehicle_cord_r[:2] - vehicle_cord[:2]).sum())
+
+                            x, y, w, h = get_2d_bounding_box(vehicle_cord[:3, :])
+                            vehicles_g.append([x, y, w, h])
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
                         cur_UAV_sample['category_id'] = np.array(category_id)

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-02 12:05:32
+LastEditTime: 2021-06-21 15:45:24
 Description: 
 '''
 from __future__ import absolute_import
@@ -25,7 +25,7 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 import sys
 sys.path.append('./')
-from transformation import get_imgcoord2worldgrid_matrices
+from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices
 import kornia
 import torch
 
@@ -36,10 +36,14 @@ camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 0.0, 1.0]]
 camera_intrinsic = np.array(camera_intrinsic)
 # worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -100], [0, 0, 1]])
-worldgrid2worldcoord_mat = np.array([[1, 0, -250], [0, 1, -250], [0, 0, 1]])
-image_size = (450, 800)
+scale_h = 1
+scale_w = 1
+worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -200], [0, 1/scale_h, -250], [0, 0, 1]])
+image_size = (int(500*scale_h), int(500*scale_w))
+# image_size = (int(500*scale_h), int(300*scale_w))
 # image_size = (225, 400)
-###################################################################
+##################################################################
+
 
 
 def vis_img(img_id, save_path, coco_, catIds, res_annos_all, dataset_dir):
@@ -81,6 +85,12 @@ def CoordTrans(image, translation, rotation, mode='L2G'):
                                                       rotation.copy(),
                                                       camera_intrinsic,
                                                       worldgrid2worldcoord_mat)
+    
+    # project_mat2 = get_imgcoord_matrices(translation.copy(),
+    #                                                   rotation.copy(),
+    #                                                   camera_intrinsic)
+    # project_mat2 = np.linalg.inv(project_mat2 @ worldgrid2worldcoord_mat)
+    
     if mode == 'L2G':
         trans_mat = project_mat
     else:
@@ -131,7 +141,9 @@ def visualize_result():
     # resFile
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/ctdet/coco_dla/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_SINGLE_GLOBAL_MESSAGE/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_SINGLE_GLOBAL_MESSAGE/results.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransImage2/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransAll/results.json')
     res_annos_all = json.load(open(result_path))
 
     # save path

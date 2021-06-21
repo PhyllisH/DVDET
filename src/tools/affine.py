@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-10 21:31:23
+LastEditTime: 2021-06-21 15:39:04
 Description: 
 '''
 import torch
@@ -35,7 +35,6 @@ def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worl
 
 def test():
     data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
-    worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -200], [0, 0, 1]])
     camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
@@ -58,30 +57,33 @@ def test():
             # print(sensor_record)
             calibrated_record = nusc.get("calibrated_sensor", sensor_record["calibrated_sensor_token"])
 
+            img: np.ndarray = cv2.imread(os.path.join(nusc.dataroot, sensor_record['filename']))
+            print(img.shape)
+            scale = 1/2
+            map_scale_h = 500 / (img.shape[0] // scale)
+            map_scale_w = 500 / (img.shape[1] // scale)
+            img = cv2.resize(img, dsize=(int(img.shape[1]/scale), int(img.shape[0]/scale)))
+            # img = cv2.resize(img, dsize=(img.shape[1], img.shape[0]))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            worldgrid2worldcoord_mat = np.array([[map_scale_w, 0, -200], [0, map_scale_h, -250], [0, 0, 1]])
+
             project_mat = get_imgcoord2worldgrid_matrices(calibrated_record["translation"].copy(),
                                                         calibrated_record["rotation"].copy(),
                                                         camera_intrinsic,
                                                         worldgrid2worldcoord_mat)
 
-            img: np.ndarray = cv2.imread(os.path.join(nusc.dataroot, sensor_record['filename']))
-            print(img.shape)
-            scale = 8
-            map_scale_h = 400 / (img.shape[0] // scale)
-            map_scale_w = 500 / (img.shape[1] // scale)
-            img = cv2.resize(img, dsize=(img.shape[1]//scale, img.shape[0]//scale))
-            # img = cv2.resize(img, dsize=(img.shape[1], img.shape[0]))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
             cv2.imwrite('ori.png', img)
 
-            map_zoom_mat = np.diag(np.append([1/map_scale_h, 1/map_scale_w], [1]))
+            # map_zoom_mat = np.diag(np.append([1/map_scale_h, 1/map_scale_w], [1]))
+            map_zoom_mat = np.diag(np.append([1, 1], [1]))
             img_zoom_mat = np.diag(np.append([scale, scale], [1]))
             # img_zoom_mat = np.diag(np.append([1, 1], [1]))
 
             data = kornia.image_to_tensor(img, keepdim=False) # [1, c, h, w ]
             data_warp = kornia.warp_perspective(data.float(),
                                                 torch.tensor( map_zoom_mat @ project_mat @ img_zoom_mat).repeat([1, 1, 1]).float(),
-                                                dsize=(int(400/map_scale_h), int(500/map_scale_w)))
+                                                dsize=(int(500/map_scale_h), int(500/map_scale_w)))
             print(data_warp.nonzero().max(dim=0)[0])
 
             # convert back to numpy
@@ -92,7 +94,7 @@ def test():
             img_warp_back = kornia.image_to_tensor(img_warp, keepdim=False)
             img_warp_back = kornia.warp_perspective(img_warp_back.float(),
                                                 torch.tensor(np.linalg.inv(map_zoom_mat @ project_mat @ img_zoom_mat)).repeat([1, 1, 1]).float(),
-                                                dsize=(450//scale, 800//scale))
+                                                dsize=(int(450/scale), int(800/scale)))
             # img_warp_back = kornia.warp_perspective(img_warp_back.float(),
             #                                     torch.tensor(np.linalg.inv(project_mat @ img_zoom_mat)).repeat([1, 1, 1]).float(),
             #                                     dsize=(450, 800))

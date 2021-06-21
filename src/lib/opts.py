@@ -236,6 +236,10 @@ class opts(object):
                                         LOCAL_MESSAGE_NOWARP: passing in uav coord [warp]')
         self.parser.add_argument('--trans_layer', default=[3], nargs='+', type=int,
                                  help='feature transform layer (range from 0 to 3), larger --> deeper')
+        self.parser.add_argument('--coord', default='Local',
+                                 help='Local or Global')
+        self.parser.add_argument('--num_agents', type=int, default=4,
+                                 help='agent number')
 
     def parse(self, args=''):
         if args == '':

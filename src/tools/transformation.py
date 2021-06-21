@@ -164,3 +164,18 @@ def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worl
     project_mat = np.linalg.inv(project_mat)
     return project_mat
 
+def get_imgcoord_matrices(tranlation, rotation, camera_intrinsic):
+    im_position = tranlation.copy()
+    im_position[2] = - im_position[2]
+    im_position = np.array(im_position).reshape((3, 1))
+    im_rotation = rotation.copy()
+    im_rotation[3] = - im_rotation[3]
+    im_rotation = Quaternion(im_rotation)
+    reverse_matrix = np.eye(3)
+    reverse_matrix[0, 0] = -1
+
+    mat = reverse_matrix @ Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T
+    extrinsic_mat = np.hstack((im_rotation.rotation_matrix, - im_rotation.rotation_matrix @ im_position))
+    extrinsic_mat = np.delete(extrinsic_mat, 2, 1)
+    project_mat = camera_intrinsic @ mat @ extrinsic_mat
+    return project_mat

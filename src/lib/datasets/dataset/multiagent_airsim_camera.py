@@ -1,12 +1,13 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-12 18:04:49
+LastEditTime: 2021-06-20 23:42:58
 Description: 
 '''
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from ipdb.__main__ import set_trace
 
 import pycocotools.coco as coco
 from pycocotools.cocoeval import COCOeval
@@ -89,7 +90,7 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.samples = samples
             self.num_samples = len(self.samples)
         else:
-            self.num_agents = 8
+            self.num_agents = int(opt.num_agents)
 
     def _to_float(x):
         return float("{:.2f}".format(x))

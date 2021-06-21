@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-13 15:40:48
+LastEditTime: 2021-06-21 16:02:54
 Description: 
 '''
 from __future__ import absolute_import
@@ -88,7 +88,7 @@ class MultiAgentDetDataset(data.Dataset):
             trans_mats_list.append(sample['trans_mat'])
         else:
             # cam_id = np.random.randint(low=0, high=5)
-            cam_list = random.sample([x for x in sample.keys() if not x.startswith('vehicles')], num_images)
+            cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
             for cam, info in sample.items():
                 if cam.startswith('vehicles'):
                     continue
@@ -117,7 +117,7 @@ class MultiAgentDetDataset(data.Dataset):
         aug_imgs = np.zeros((num_images, 3, input_h, input_w), dtype=np.float32)
         
         # ----------- TransMat ------------- #
-        trans_mats = np.zeros((num_images, 3, 3), dtype=np.float32)
+        trans_mats = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
 
         draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else \

@@ -30,7 +30,7 @@ def main(opt):
 
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
-    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer)
+    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord)
     optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
     if opt.load_model != '':
