@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-21 16:02:54
+LastEditTime: 2021-06-27 23:32:33
 Description: 
 '''
 from __future__ import absolute_import
@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from itertools import count
 import random
+from numpy.core.numeric import ones
 
 import torch.utils.data as data
 import numpy as np
@@ -21,11 +22,34 @@ from utils.image import get_affine_transform, affine_transform
 from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
 from utils.image import draw_dense_reg
 import math
+# import kornia
 
 
 class MultiAgentDetDataset(data.Dataset):
     def _coco_box_to_bbox(self, box):
         bbox = np.array([box[0], box[1], box[0] + box[2], box[1] + box[3]],
+                        dtype=np.float32)
+        return bbox
+    
+    def _coco2polygon(self, bbox):
+        x, y, w, h = bbox
+        left_up = [x, y]
+        left_bottom = [x, y+h]
+        right_up = [x+w, y]
+        right_bottom = [x+w, y+h]
+        return np.array([left_up, left_bottom, right_bottom, right_up]).reshape([4,2]).T
+
+    def _2d_bounding_box(self, cords):
+        """
+        transform the 3D bounding box to 2D
+        :param cords: <3, 8> the first channel: x, y, z; the second channel is the points amount
+        :return <4, > 2D bounding box (x, y, w, h)
+        """
+        x_min = min(cords[0])
+        x_max = max(cords[0])
+        y_min = min(cords[1])
+        y_max = max(cords[1])
+        bbox = np.array([x_min, y_min, x_max, y_max],
                         dtype=np.float32)
         return bbox
 
@@ -46,23 +70,23 @@ class MultiAgentDetDataset(data.Dataset):
             input_h, input_w = self.opt.input_h, self.opt.input_w
         
         flipped = False
-        if self.split == 'train':
-            if not self.opt.not_rand_crop:
-                s = s * np.random.choice(np.arange(0.6, 1.4, 0.1))
-                w_border = self._get_border(128, width)
-                h_border = self._get_border(128, height)
-                c[0] = np.random.randint(low=w_border, high=width - w_border)
-                c[1] = np.random.randint(low=h_border, high=height - h_border)
-            else:
-                sf = self.opt.scale
-                cf = self.opt.shift
-                c[0] += s * np.clip(np.random.randn() * cf, -2 * cf, 2 * cf)
-                c[1] += s * np.clip(np.random.randn() * cf, -2 * cf, 2 * cf)
-                s = s * np.clip(np.random.randn() * sf + 1, 1 - sf, 1 + sf)
+        # if self.split == 'train' and self.opt.coord != 'Global':
+        #     if not self.opt.not_rand_crop:
+        #         s = s * np.random.choice(np.arange(0.6, 1.4, 0.1))
+        #         w_border = self._get_border(128, width)
+        #         h_border = self._get_border(128, height)
+        #         c[0] = np.random.randint(low=w_border, high=width - w_border)
+        #         c[1] = np.random.randint(low=h_border, high=height - h_border)
+        #     else:
+        #         sf = self.opt.scale
+        #         cf = self.opt.shift
+        #         c[0] += s * np.clip(np.random.randn() * cf, -2 * cf, 2 * cf)
+        #         c[1] += s * np.clip(np.random.randn() * cf, -2 * cf, 2 * cf)
+        #         s = s * np.clip(np.random.randn() * sf + 1, 1 - sf, 1 + sf)
 
-            if np.random.random() < self.opt.flip:
-                flipped = True
-                c[0] = width - c[0] - 1
+        #     if np.random.random() < self.opt.flip:
+        #         flipped = True
+        #         c[0] = width - c[0] - 1
 
         trans_input = get_affine_transform(
             c, s, 0, [input_w, input_h])
@@ -74,8 +98,8 @@ class MultiAgentDetDataset(data.Dataset):
         return c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w
 
     def load_sample(self, sample, num_images=8):
-        images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
-        vehicles_key = 'vehicles_i' if self.opt.coord_mode == 'local' else 'vehicles_g'
+        images_key = 'image'
+        vehicles_key = 'vehicles_i'
         
         images = []
         vehicles = []
@@ -141,13 +165,26 @@ class MultiAgentDetDataset(data.Dataset):
 
             gt_det = []
             num_objs = len(objs)
+            worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
             for k in range(num_objs):
-                bbox = self._coco_box_to_bbox(objs[k])
                 cls_id = int(self.cat_ids[category_ids[k]])
-                if flipped:
-                    bbox[[0, 2]] = width - bbox[[2, 0]] - 1
-                bbox[:2] = affine_transform(bbox[:2], trans_output)
-                bbox[2:] = affine_transform(bbox[2:], trans_output)
+                if self.opt.coord == 'Global':
+                    bbox = self._coco2polygon(objs[k])  # (2, 4)
+                    if flipped:
+                        bbox[0] = width - bbox[0] - 1
+                    coord = np.concatenate([bbox, np.ones([1, bbox.shape[-1]])], axis=0)  # (3, 4)
+                    cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+                    coord_warp = cur_trans_mats @ coord
+                    coord_warp = coord_warp / coord_warp[2, :]
+                    coord_warp = trans_output @ coord_warp  # (3, 4)
+                    bbox = self._2d_bounding_box(coord_warp)
+                else:
+                    bbox = self._coco_box_to_bbox(objs[k])
+                    if flipped:
+                        bbox[[0, 2]] = width - bbox[[2, 0]] - 1
+                    bbox[:2] = affine_transform(bbox[:2], trans_output)
+                    bbox[2:] = affine_transform(bbox[2:], trans_output)
+                
                 bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w - 1)
                 bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
                 h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
@@ -172,6 +209,23 @@ class MultiAgentDetDataset(data.Dataset):
                     gt_det.append(cur_gt_det)
             gt_det = np.array(gt_det, dtype=np.float32) if len(gt_det) > 0 else np.zeros((1, 6), dtype=np.float32)
             gt_dets.append(gt_det)
+
+        # cv2.imwrite('hm.png', (hm[0,0]*255).astype('uint8'))
+        # save_img = (aug_imgs[0]*255).astype('uint8').transpose(1,2,0)
+        # cv2.imwrite('ori.png', save_img)
+        # # cur_trans_mats = np.linalg.inv(trans_mats[0] @ worldgrid2worldcoord_mat @ np.linalg.inv(np.concatenate([trans_output, np.array([0, 0, 1]).reshape([1,3])], axis=0)))
+        # cur_trans_mats = np.linalg.inv(trans_mats[0] @ worldgrid2worldcoord_mat)
+        # data = kornia.image_to_tensor(save_img, keepdim=False)
+        # data_warp = kornia.warp_perspective(data.float(),
+        #                                     torch.tensor(cur_trans_mats).repeat([1, 1, 1]).float(),
+        #                                     dsize=(input_h, input_w))
+        # # convert back to numpy
+        # img_warp = kornia.tensor_to_image(data_warp.byte())
+        # img_warp = cv2.resize(img_warp, dsize=(output_w, output_h))
+        # heatmap = (hm[0,0].reshape([output_h, output_w, 1]).repeat(3, axis=-1)*255).astype('uint8')
+        # img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
+        # cv2.imwrite('ori_warp.png', img_warp)
+        # import ipdb; ipdb.set_trace()
         return c, s, aug_imgs, trans_mats, hm, wh, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets
 
     def __getitem__(self, index):

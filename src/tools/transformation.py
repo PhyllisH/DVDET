@@ -145,6 +145,66 @@ def image_points_to_global(image_points, translation, rotation, camera_intrinsic
 
     return restore_global
 
+def get_imagecoord_from_worldcoord(world_coord, tranlation, rotation, camera_intrinsic, ignore_z=False):
+    im_position = tranlation.copy()
+    im_position[2] = - im_position[2]
+    im_position = np.array(im_position).reshape((3, 1))
+    im_rotation = rotation.copy()
+    im_rotation[3] = - im_rotation[3]
+    im_rotation = Quaternion(im_rotation)
+    reverse_matrix = np.eye(3)
+    reverse_matrix[0, 0] = -1
+
+    mat = reverse_matrix @ Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T
+    extrinsic_mat = np.hstack((im_rotation.rotation_matrix, - im_rotation.rotation_matrix @ im_position))
+
+    if ignore_z:
+        # Ignore z
+        extrinsic_mat = np.delete(extrinsic_mat, 2, 1)
+        project_mat = camera_intrinsic @ mat @ extrinsic_mat
+        image_coord = project_mat @ np.concatenate([world_coord[:2], np.ones([1, world_coord.shape[-1]])], axis=0)
+    else:
+        # Consider z
+        project_mat = camera_intrinsic @ mat @ extrinsic_mat
+        image_coord = project_mat @ np.concatenate([world_coord, np.ones([1, world_coord.shape[-1]])], axis=0)
+
+    image_coord = image_coord[:3] / image_coord[2, :]
+    return image_coord
+
+
+def get_worldcoord_from_imagecoord(image_coord, tranlation, rotation, camera_intrinsic, z0=0):
+    im_position = tranlation.copy()
+    im_position[2] = - im_position[2]
+    im_position = np.array(im_position).reshape((3, 1))
+    im_rotation = rotation.copy()
+    im_rotation[3] = - im_rotation[3]
+    im_rotation = Quaternion(im_rotation)
+    reverse_matrix = np.eye(3)
+    reverse_matrix[0, 0] = -1
+
+    mat = reverse_matrix @ Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T
+
+    if isinstance(z0, np.ndarray):
+        extrinsic_mat = im_rotation.rotation_matrix
+        project_mat = camera_intrinsic @ mat @ extrinsic_mat
+        project_mat = np.linalg.inv(project_mat)
+        world_coord = project_mat @ image_coord
+        d = (z0 - im_position[2]) / world_coord[2, :]
+        world_coord = im_position + world_coord * d
+    else:
+        extrinsic_mat = np.hstack((im_rotation.rotation_matrix, - im_rotation.rotation_matrix @ im_position))
+        extrinsic_mat = np.delete(extrinsic_mat, 2, 1)
+        project_mat = camera_intrinsic @ mat @ extrinsic_mat
+        project_mat = np.linalg.inv(project_mat)
+        image_coord = np.concatenate([image_coord[:2], np.ones([1, image_coord.shape[1]])], axis=0)
+        world_coord = project_mat @ image_coord
+        world_coord = world_coord / world_coord[2, :]
+    return world_coord
+
+def WorldCoord2WorldGrid(coord, scale_w=1, scale_h=1):
+    x = (coord[0:1] + 200) * scale_w
+    y = (coord[1:2] + 250) * scale_h
+    return np.concatenate([x, y], axis=0)
 
 def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worldgrid2worldcoord_mat):
     im_position = tranlation.copy()

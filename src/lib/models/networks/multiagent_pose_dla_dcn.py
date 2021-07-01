@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-21 15:08:12
+LastEditTime: 2021-06-24 15:31:18
 Description: 
 '''
 
@@ -952,10 +952,10 @@ class DLASeg(nn.Module):
 
                 # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
                 # uav_i --> global coord
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/w, 0, -200], [0, 500/h, -250], [0, 0, 1]])).to(trans_mats.device)
+                worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*2), 0, -200], [0, 500/(h*2), -250], [0, 0, 1]])).to(trans_mats.device)
                 feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
                 cur_trans_mats = torch.inverse(trans_mats @ worldgrid2worldcoord_mat) @ feat_zoom_mats
-                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h, w)) # (b*num_agents, c, h, w)
+                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*2, w*2)) # (b*num_agents, c, h, w)
                 
                 global_x.append(global_feat)
                 trans_mats_list.append(cur_trans_mats)
@@ -971,10 +971,9 @@ class DLASeg(nn.Module):
         z = {}
         for head in self.heads:
             global_z[head] = self.__getattr__(head)(y[-1]) # (b*num_agent, 2, 112, 200)
-            # 3. Return fused feat
-            # global coord --> uav_j
-            z[head] = kornia.warp_perspective(global_z[head], trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
-        return [z]
+            # z[head] = kornia.warp_perspective(global_z[head], trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
+        # return [z]
+        return [global_z]
     
     def forward(self, images, trans_mats):
         if self.coord == 'Global':

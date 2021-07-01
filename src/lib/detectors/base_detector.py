@@ -54,6 +54,7 @@ class BaseDetector(object):
             resized_image, trans_input, (inp_width, inp_height),
             flags=cv2.INTER_LINEAR)
         inp_image = ((inp_image / 255. - self.mean) / self.std).astype(np.float32)
+        # inp_image = (inp_image / 255.).astype(np.float32)
 
         images = inp_image.transpose(2, 0, 1).reshape(1, 3, inp_height, inp_width)
         if self.opt.flip_test:

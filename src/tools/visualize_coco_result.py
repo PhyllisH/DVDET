@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-21 15:45:24
+LastEditTime: 2021-06-28 15:56:35
 Description: 
 '''
 from __future__ import absolute_import
@@ -25,28 +25,44 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 import sys
 sys.path.append('./')
-from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices
+from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord
 import kornia
 import torch
 
 ####################### Default Settings #########################
-vis_score_thre = 0.5
+dataset_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15'
+# dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
+vis_score_thre = 0.3
 camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
 camera_intrinsic = np.array(camera_intrinsic)
 # worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -100], [0, 0, 1]])
-scale_h = 1
-scale_w = 1
+scale_h = 450/500
+scale_w = 800/500
 worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -200], [0, 1/scale_h, -250], [0, 0, 1]])
 image_size = (int(500*scale_h), int(500*scale_w))
 # image_size = (int(500*scale_h), int(300*scale_w))
 # image_size = (225, 400)
 ##################################################################
 
+def BoxCoordTrans(coord, tranlation, rotation, mode='L2G'):
+    project_mat = get_imgcoord_matrices(tranlation.copy(), rotation.copy(), camera_intrinsic)
+    project_mat = project_mat @ worldgrid2worldcoord_mat
+    if mode == 'L2G':
+        project_mat = np.linalg.inv(project_mat)
+    coord = np.concatenate([coord[:2], np.ones([1, coord.shape[1]])], axis=0)
+    coord_warp = project_mat @ coord
+    coord_warp = coord_warp / coord_warp[2, :]
+    return coord_warp
+
+def WorldCoord2WorldGrid(coord):
+    x = (coord[0:1] + 200) * scale_w
+    y = (coord[1:2] + 250) * scale_h
+    return np.concatenate([x, y], axis=0)
 
 
-def vis_img(img_id, save_path, coco_, catIds, res_annos_all, dataset_dir):
+def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
     """
     Visualize and save image (img_id) 
     :param img_id: int, image id in class coco_
@@ -57,6 +73,7 @@ def vis_img(img_id, save_path, coco_, catIds, res_annos_all, dataset_dir):
     :param dataset_dir: image root path
     :return: image <h, w, 3> or None
     """
+    img_id = sensor['image_id']
     img = coco_.loadImgs(img_id)[0]
     annIds = coco_.getAnnIds(imgIds=img['id'], catIds=catIds, iscrowd=None)
     annos = coco_.loadAnns(annIds)
@@ -64,12 +81,23 @@ def vis_img(img_id, save_path, coco_, catIds, res_annos_all, dataset_dir):
     if len(res_annos) < 1:
         return
 
-    image = cv2.imread(os.path.join(dataset_dir, img['file_name']))
+    if mode == 'Local':
+        image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
+        image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
+        image_up = vis_cam(image_u.copy(), annos)
+        image_up = vis_cam(image_up, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
+        image_gp = vis_cam_g(image_g, annos, sensor['translation'].copy(), sensor['rotation'].copy())
+        image_gp = vis_cam_g(image_gp, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre)
+    else:
+        # import ipdb; ipdb.set_trace()
+        image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
+        image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
+        image_up = vis_cam_g(image_u, annos, sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L')
+        image_up = vis_cam_g(image_up, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre, mode='G2L')
+        image_gp = vis_cam(image_g.copy(), annos)
+        image_gp = vis_cam(image_gp, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
 
-    image = vis_cam(image, annos)
-    image = vis_cam(image, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
-    cv2.imwrite('{}/{}_pred.png'.format(save_path, img_id), image)
-    return image
+    return image_up, image_gp
 
 def CoordTrans(image, translation, rotation, mode='L2G'):
     """
@@ -107,10 +135,37 @@ def CoordTrans(image, translation, rotation, mode='L2G'):
 
 def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1):
     for anno in annos:
-        if anno.get('score', 0) > vis_thre:
+        if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
             bbox = anno['bbox']
             x, y, w, h = bbox
             image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, 1)
+    return image
+
+def xywh2polygon(bbox):
+    x, y, w, h = bbox
+    left_up = [x, y]
+    left_bottom = [x, y+h]
+    right_up = [x+w, y]
+    right_bottom = [x+w, y+h]
+    return np.array([left_up, left_bottom, right_bottom, right_up]).reshape([4,2]).T
+
+def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=-1, mode='L2G'):
+    # ori_image = image.copy().mean(axis=-1)
+    for anno in annos:
+        if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+            bbox = anno['bbox']
+            polygon = xywh2polygon(bbox)    # [2, 4]
+            bbox_g = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode)
+            # bbox_g_back = BoxCoordTrans(bbox_g.copy(), tranlation, rotation, mode='G2L')
+            # print('Diff: ', np.abs(bbox_g_back[:2]-polygon).sum())
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            # bbox_g = WorldCoord2WorldGrid(bbox_g[:2])
+            # print('bbox_g: ', bbox_g)
+            # print('x: {}-{}, y: {}-{}'.format(ori_image.nonzero()[1].min(), ori_image.nonzero()[1].max(), ori_image.nonzero()[0].min(), ori_image.nonzero()[0].max()))
+            image = cv2.polylines(image, pts=np.int32([bbox_g[:2].T.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
+    # cv2.imwrite('test.png', image)
+    # import ipdb; ipdb.set_trace()
     return image
 
 def vis_uav(images):
@@ -131,20 +186,32 @@ def vis_sample(images):
     return image
 
 def visualize_result():
-    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
-    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
-    coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/val_instances.json'))
-    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
-    catIds = coco_.getCatIds()
-    imgIds = coco_.getImgIds()
-
     # resFile
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/ctdet/coco_dla/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results_LateFused.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results_BEV.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results_LateFused.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_SINGLE_GLOBAL_MESSAGE/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransImage2/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransImage2/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransAll/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransAll_GlobalCoord/trainval_results.json')
+    coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
+    print('Coord_mode: ', coord_mode)
     res_annos_all = json.load(open(result_path))
+
+    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
+    # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
+    if coord_mode == 'Global':
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances_global.json'))
+        # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/train_instances_global.json'))
+    else:    
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances.json'))
+    
+    catIds = coco_.getCatIds()
+    imgIds = coco_.getImgIds()
 
     # save path
     save_path = os.path.join(os.path.dirname(result_path), 'vis')
@@ -153,10 +220,10 @@ def visualize_result():
     
     # Vis Sample
     samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'val_instances_sample.pkl'), 'rb'))['samples']
+    # samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'train_instances_sample.pkl'), 'rb'))['samples']
     for sample_id, sample in enumerate(samples):
-        images = {}
-        translations = {}
-        rotations = {}
+        images_up = {}
+        images_gp = {}
         for k, sensor in sample.items():
             if k.startswith('vehicles'):
                 continue
@@ -165,13 +232,12 @@ def visualize_result():
                     sample_save_path = os.path.join(save_path, '{}'.format(sample_id))
                     if not os.path.exists(sample_save_path):
                         os.makedirs(sample_save_path)
-                    image = vis_img(sensor['image_id'], sample_save_path, coco_, catIds, res_annos_all, dataset_dir)
-                    if image is not None:
-                        images[k] = image
-                        translations[k] = sensor['translation']
-                        rotations[k] = sensor['rotation']
-        uavs = set([x.split('_')[-1] for x in images])
-        cams = set([x.split('_')[0] for x in images])
+                    image_up, image_gp = vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, coord_mode)
+                    if image_up is not None:
+                        images_up[k] = image_up
+                        images_gp[k] = image_gp
+        uavs = set([x.split('_')[-1] for x in images_up])
+        cams = set([x.split('_')[0] for x in images_up])
         uav_images = {}
         uav_images_g = {}
         for uav in uavs:
@@ -179,8 +245,13 @@ def visualize_result():
             cur_uav_g = {}
             for cam in cams:
                 cam_name = '{}_{}'.format(cam, uav)
-                cur_uav[cam] = images[cam_name]
-                cur_uav_g[cam] = CoordTrans(images[cam_name].copy(), translations[cam_name], rotations[cam_name])
+                cur_uav[cam] = images_up[cam_name]
+                cv2.imwrite('{}/{}_pred.png'.format(sample_save_path, cam_name), cur_uav[cam])
+                # cur_uav_g[cam] = CoordTrans(ori_images[cam_name].copy(), translations[cam_name].copy(), rotations[cam_name].copy())
+                # cur_uav_g[cam] = vis_cam_g(cur_uav_g[cam], box_annos[cam_name], translations[cam_name].copy(), rotations[cam_name].copy())
+                # cur_uav_g[cam] = vis_cam_g(cur_uav_g[cam], res_box_annos[cam_name], translations[cam_name].copy(), rotations[cam_name].copy(), color=(0, 0, 255), vis_thre=vis_score_thre)
+                cur_uav_g[cam] = images_gp[cam_name]
+                cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam_name), cur_uav_g[cam])
                 # # vis original
                 # ori_img = images[cam_name]
                 # cv2.imwrite('ori.png', ori_img)
@@ -198,7 +269,7 @@ def visualize_result():
         cv2.imwrite('{}/pred.png'.format(sample_save_path), sample_image)
         sample_image_g = np.concatenate([x[None,:,:,:] for _, x in uav_images_g.items()], axis=0).max(axis=0)
         cv2.imwrite('{}/pred_g.png'.format(sample_save_path, uav), sample_image_g)
-
+        # import ipdb; ipdb.set_trace()
 
     # Vis Image
     # for img_id in imgIds[:100]:

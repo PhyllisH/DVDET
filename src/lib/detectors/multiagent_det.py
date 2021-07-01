@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-05-23 21:42:06
+LastEditTime: 2021-06-24 09:44:20
 Description: 
 '''
 
@@ -98,7 +98,7 @@ class MultiAgentDetector(BaseDetector):
 
     def show_results(self, debugger, image, results):
         for i in range(len(image)):
-            debugger.add_img(image[i], img_id='ctdet')
+            debugger.add_img(image[i].cpu().numpy(), img_id='ctdet')
             for j in range(1, self.num_classes + 1):
                 for bbox in results[i][j]:
                     if bbox[4] > self.opt.vis_thresh:

@@ -361,7 +361,7 @@ class opts(object):
             'ctdet': {'default_resolution': [448, 800], 'num_classes': 2,
                       'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
                       'dataset': 'airsim_camera'},
-            'multiagent_det': {'default_resolution': [448, 800], 'num_classes': 2,
+            'multiagent_det': {'default_resolution': [448, 800], 'num_classes': 1,
                       'mean': [0.408, 0.447, 0.470], 'std': [0.289, 0.274, 0.278],
                       'dataset': 'multiagent_airsim_camera'},
             'exdet': {'default_resolution': [512, 512], 'num_classes': 80,

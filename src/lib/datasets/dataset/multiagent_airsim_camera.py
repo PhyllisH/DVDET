@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-20 23:42:58
+LastEditTime: 2021-06-28 11:20:40
 Description: 
 '''
 from __future__ import absolute_import
@@ -20,7 +20,7 @@ import torch.utils.data as data
 
 
 class MULTIAGENTAIRSIMCAM(data.Dataset):
-    num_classes = 2
+    num_classes = 1
     default_resolution = [448, 800]
     mean = np.array([0.58375601, 0.54399371, 0.47015152],
                     dtype=np.float32).reshape(1, 1, 3)
@@ -29,35 +29,35 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
 
     def __init__(self, opt, split):
         super(MULTIAGENTAIRSIMCAM, self).__init__()
-        self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
+        # self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
+        self.data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15'
         # print('Data dir: {}'.format(self.data_dir))
         # self.img_dir = os.path.join(self.data_dir, 'images')
         self.img_dir = self.data_dir
         if split == 'val':
             self.annot_path = os.path.join(
                 self.data_dir, 'multiagent_annotations', 'val_instances_sample.pkl')
-            self.annot_path_cocoformat = os.path.join(
-                self.data_dir, 'multiagent_annotations', 'val_instances.json')
-        else:
-            if opt.task == 'exdet':
-                self.annot_path = os.path.join(
-                    self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
+            if opt.coord == 'Global':
                 self.annot_path_cocoformat = os.path.join(
-                    self.data_dir, 'multiagent_annotations', 'train_instances.json')
-            if split == 'test':
-                self.annot_path = os.path.join(
-                    self.data_dir, 'multiagent_annotations', 'val_instances.pkl')
+                    self.data_dir, 'multiagent_annotations', 'val_instances_global.json')
+            else:
                 self.annot_path_cocoformat = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'val_instances.json')
+        else:
+            self.annot_path = os.path.join(
+                self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
+            if opt.coord == 'Global':
+                self.annot_path_cocoformat = os.path.join(
+                    self.data_dir, 'multiagent_annotations', 'train_instances_global.json')
             else:
-                self.annot_path = os.path.join(
-                    self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
                 self.annot_path_cocoformat = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'train_instances.json')
         self.max_objs = 128
-        self.class_name = [
-            'car', 'car_overlook']
-        self._valid_ids = [1, 2]
+        # self.class_name = [
+        #     'car', 'car_overlook']
+        # self._valid_ids = [1, 2]
+        self.class_name = ['car']
+        self._valid_ids = [1]
         self.cat_ids = {v: i for i, v in enumerate(self._valid_ids)}
         self.voc_color = [(v // 32 * 64 + 64, (v // 8) % 4 * 64, v % 8 * 32) \
                           for v in range(1, self.num_classes + 1)]

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-21 22:23:07
+LastEditTime: 2021-06-28 11:09:22
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -12,6 +12,7 @@ from __future__ import print_function
 import pickle
 import json
 from typing_extensions import OrderedDict
+from ipdb.__main__ import set_trace
 import numpy as np
 import math
 import cv2
@@ -114,33 +115,39 @@ def UAVtoUAV(UAV_I1, T1, T2):
 '''
 
 
-train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 'scene_5',
-               'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
-               'scene_13', 'scene_14', 'scene_16', 'scene_17', 'scene_18', 'scene_19',
-               'scene_20', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_26',
-               'scene_28', 'scene_29', 'scene_30', 'scene_31', 'scene_32', 'scene_33',
-               'scene_34', 'scene_35', 'scene_36', 'scene_37', 'scene_38', 'scene_39',
-               'scene_40', 'scene_42', 'scene_44', 'scene_45', 'scene_46', 'scene_47',
-               'scene_48', 'scene_49', 'scene_50', 'scene_51', 'scene_52', 'scene_53',
-               'scene_55', 'scene_56', 'scene_57', 'scene_61', 'scene_62', 'scene_63',
-               'scene_65', 'scene_66', 'scene_67', 'scene_68', 'scene_69', 'scene_70',
-               'scene_71', 'scene_72', 'scene_73', 'scene_75', 'scene_76', 'scene_77',
-               'scene_78', 'scene_79', 'scene_80', 'scene_81', 'scene_82', 'scene_83',
-               'scene_84', 'scene_87', 'scene_88', 'scene_90', 'scene_92', 'scene_94',
-               'scene_95', 'scene_97', 'scene_98', 'scene_99', 'scene_100', 'scene_101',
-               'scene_102', 'scene_103', 'scene_104', 'scene_105', 'scene_106', 'scene_107',
-               'scene_108', 'scene_109', 'scene_110', 'scene_111', 'scene_112', 'scene_113',
-               'scene_114', 'scene_116', 'scene_118', 'scene_119']
+# train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 'scene_5',
+#                'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
+#                'scene_13', 'scene_14', 'scene_16', 'scene_17', 'scene_18', 'scene_19',
+#                'scene_20', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_26',
+#                'scene_28', 'scene_29', 'scene_30', 'scene_31', 'scene_32', 'scene_33',
+#                'scene_34', 'scene_35', 'scene_36', 'scene_37', 'scene_38', 'scene_39',
+#                'scene_40', 'scene_42', 'scene_44', 'scene_45', 'scene_46', 'scene_47',
+#                'scene_48', 'scene_49', 'scene_50', 'scene_51', 'scene_52', 'scene_53',
+#                'scene_55', 'scene_56', 'scene_57', 'scene_61', 'scene_62', 'scene_63',
+#                'scene_65', 'scene_66', 'scene_67', 'scene_68', 'scene_69', 'scene_70',
+#                'scene_71', 'scene_72', 'scene_73', 'scene_75', 'scene_76', 'scene_77',
+#                'scene_78', 'scene_79', 'scene_80', 'scene_81', 'scene_82', 'scene_83',
+#                'scene_84', 'scene_87', 'scene_88', 'scene_90', 'scene_92', 'scene_94',
+#                'scene_95', 'scene_97', 'scene_98', 'scene_99', 'scene_100', 'scene_101',
+#                'scene_102', 'scene_103', 'scene_104', 'scene_105', 'scene_106', 'scene_107',
+#                'scene_108', 'scene_109', 'scene_110', 'scene_111', 'scene_112', 'scene_113',
+#                'scene_114', 'scene_116', 'scene_118', 'scene_119']
 
-val_split = ['scene_7', 'scene_15', 'scene_25', 'scene_27', 'scene_41', 'scene_43',
-             'scene_54', 'scene_58', 'scene_59', 'scene_60', 'scene_64', 'scene_74',
-             'scene_85', 'scene_86', 'scene_89', 'scene_91', 'scene_93', 'scene_96',
-             'scene_115', 'scene_117']
+# val_split = ['scene_7', 'scene_15', 'scene_25', 'scene_27', 'scene_41', 'scene_43',
+#              'scene_54', 'scene_58', 'scene_59', 'scene_60', 'scene_64', 'scene_74',
+#              'scene_85', 'scene_86', 'scene_89', 'scene_91', 'scene_93', 'scene_96',
+#              'scene_115', 'scene_117']
+
+train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 
+               'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
+               'scene_13', 'scene_14']
+val_split = [ 'scene_5']
 
 
 def convert_multiview_coco():
     # data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
-    data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
+    # data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
+    data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
     DEBUG = False
     nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
 
@@ -164,6 +171,7 @@ def convert_multiview_coco():
     bbox_id = 0
     for split in splits:
         ret_i = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
+        ret_g = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
         ret_s = {"samples": [], "type": "sample", "categories": cat_info}
         for scene in tqdm(nusc.scene):
             if not scene["name"] in scene_split[split]:
@@ -191,7 +199,9 @@ def convert_multiview_coco():
                 sample_data = cur_sample["data"]
                 sensors = list(sample_data.keys())
                 UAV_idx = list(set([sensor.split('_')[-1] for sensor in sensors]))
+                UAV_idx.sort()
                 UAV_cams = list(set([sensor.split('_')[1] for sensor in sensors]))
+                UAV_cams.sort()
                 for UAV_id in UAV_idx:
                     for UAV_cam in UAV_cams:
                         image_id += 1
@@ -218,6 +228,8 @@ def convert_multiview_coco():
                                         'height': H,
                                         'width': W}
                         ret_i['images'].append(image_info)
+                        ret_g['images'].append(image_info)
+
                         # global image
                         # /DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/global_sweeps
                         # check warp func
@@ -248,20 +260,23 @@ def convert_multiview_coco():
                         cur_UAV_sample['image_id'] = image_id
                         
                         # vehicle info
-                        cat_id = 2 if UAV_cam == 'BOTTOM' else 1
+                        # cat_id = 2 if UAV_cam == 'BOTTOM' else 1
+                        cat_id = 1
                         vehicles_i = []
                         vehicles_g = []
                         category_id = []
+                        seg_img = cv2.imread(os.path.join(data_dir, os.path.dirname(sensor_record['filename']), os.path.basename(sensor_record['filename']).split('.')[0]+'_seg.png'))
                         for vehicle_cord in vehicle_cords:
                             # get bbox from vehicle_cord
                             vehicle_cord_img = global_points_to_image(vehicle_cord.copy()[:3,], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
-
                             if vehicle_cord_img.shape[-1] == 0:
                                 continue
                             x, y, w, h = get_2d_bounding_box(vehicle_cord_img)
                             # Check box
                             if x < 0 or y < 0 or (x + w) > W or (y + h) > H:
                                 continue
+                            ignore = 0 if seg_img is None or list(seg_img[int(y+h/2),int(x+w/2)]) == [229, 90, 95] else 1
+                            # print(seg_img[int(y+h/2),int(x+w/2)], ignore)
                             bbox_id += 1
                             ann = { 'area': w * h,
                                     'iscrowd': 0,
@@ -269,18 +284,34 @@ def convert_multiview_coco():
                                     'bbox': [x, y, w, h],
                                     'category_id': cat_id,
                                     'id': bbox_id,
-                                    'ignore': 0,
+                                    'ignore': ignore,
                                     'segmentation': []}
                             ret_i['annotations'].append(ann)
-                            vehicles_i.append([x, y, w, h])
-                            category_id.append(cat_id)
+                            if not ignore:
+                                vehicles_i.append([x, y, w, h])
+                                category_id.append(cat_id)
 
                             # img_coords = global_points_to_image(vehicle_cord.copy()[:3], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
-                            # vehicle_cord_r = image_points_to_global(img_coords, cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
+                            # vehicle_cord_r = image_points_to_global(img_coords.copy(), cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
                             # print('Diff: ', np.abs(vehicle_cord_r[:2] - vehicle_cord[:2]).sum())
+                            # img_coords2 = get_imagecoord_from_worldcoord(vehicle_cord.copy()[:3], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
+                            # vehicle_cord_r2 = get_worldcoord_from_imagecoord(img_coords.copy(), cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
+                            # print('Diff: ', np.abs(vehicle_cord_r2[:2] - vehicle_cord[:2]).sum())
+                            # print('Diff: ', np.abs(img_coords2[:2] - img_coords[:2]).sum())
 
-                            x, y, w, h = get_2d_bounding_box(vehicle_cord[:3, :])
-                            vehicles_g.append([x, y, w, h])
+                            vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=800/500, scale_h=450/500)
+                            x, y, w, h = get_2d_bounding_box(vehicle_grid[:3])
+                            ann = { 'area': w * h,
+                                    'iscrowd': 0,
+                                    'image_id': image_id,
+                                    'bbox': [x, y, w, h],
+                                    'category_id': cat_id,
+                                    'id': bbox_id,
+                                    'ignore': ignore,
+                                    'segmentation': []}
+                            ret_g['annotations'].append(ann)
+                            if not ignore:
+                                vehicles_g.append([x, y, w, h])
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
                         cur_UAV_sample['category_id'] = np.array(category_id)
@@ -293,10 +324,11 @@ def convert_multiview_coco():
         print("# images: ", len(ret_i['images']))
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
-        out_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances.json'.format(split)
-        # out_global_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances_global.json'.format(split)
-        out_sample_path = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene/multiagent_annotations/{}_instances_sample.pkl'.format(split)
+        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances.json'.format(split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_global.json'.format(split))
+        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_sample.pkl'.format(split))
         json.dump(ret_i, open(out_path, 'w'))
+        json.dump(ret_g, open(out_global_path, 'w'))
         pkl.dump(ret_s, open(out_sample_path, 'wb')) 
 
 if __name__ == '__main__':
