@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
+from torch import stack 
 import torch.nn as nn
 from .utils import _gather_feat, _transpose_and_gather_feat
 
@@ -471,7 +472,7 @@ def ddd_decode(heat, rot, depth, dim, wh=None, reg=None, K=40):
     return detections
 
 
-def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
+def ctdet_decode(heat, wh, reg=None, angle=None, cat_spec_wh=False, K=100):
     batch, cat, height, width = heat.size()
 
     # heat = torch.sigmoid(heat)
@@ -496,13 +497,47 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
         wh = wh.view(batch, K, 2)
     clses = clses.view(batch, K, 1).float()
     scores = scores.view(batch, K, 1)
-    bboxes = torch.cat([xs - wh[..., 0:1] / 2,
-                        ys - wh[..., 1:2] / 2,
-                        xs + wh[..., 0:1] / 2,
-                        ys + wh[..., 1:2] / 2], dim=2)
-    detections = torch.cat([bboxes, scores, clses], dim=2)
-
+    if angle is None:
+        bboxes = torch.cat([xs - wh[..., 0:1] / 2,
+                            ys - wh[..., 1:2] / 2,
+                            xs + wh[..., 0:1] / 2,
+                            ys + wh[..., 1:2] / 2], dim=2)
+        detections = torch.cat([bboxes, scores, clses], dim=2)
+    else:
+        bboxes = torch.cat([xs - wh[..., 0:1] / 2,
+                            ys - wh[..., 1:2] / 2,
+                            xs - wh[..., 0:1] / 2,
+                            ys + wh[..., 1:2] / 2,
+                            xs + wh[..., 0:1] / 2,
+                            ys - wh[..., 1:2] / 2,
+                            xs + wh[..., 0:1] / 2,
+                            ys + wh[..., 1:2] / 2], dim=2)
+        bboxes = bboxes.view(batch, K, 4, 2)
+        bboxes = bboxes.view(batch*K, 4, 2)
+        angle = _transpose_and_gather_feat(angle, inds)
+        angle = angle.view(batch, K, 2)
+        angle = angle.view(batch*K, 2)
+        rot_bboxes = rotation_2d_torch(bboxes, angle)
+        rot_bboxes = rot_bboxes.view(batch, K, 4, 2).view(batch, K, 8)
+        detections = torch.cat([bboxes, scores, clses], dim=2)
     return detections
+
+def rotation_2d_torch(points, angles):
+    """rotation 2d points based on origin point clockwise when angle positive.
+    
+    Args:
+        points (float array, shape=[N, point_size, 2]): points to be rotated.
+        angles (float array, shape=[N]): rotation angle.
+
+    Returns:
+        float array: same shape as points
+    """
+    rot_sin = angles[:,0]
+    rot_cos = angles[:,1]
+    rot_mat_T = torch.stack(
+        [stack([rot_cos, -rot_sin]),
+        stack([rot_sin, rot_cos])])
+    return torch.einsum('aij,jka->aik', (points, rot_mat_T))
 
 
 def multi_pose_decode(

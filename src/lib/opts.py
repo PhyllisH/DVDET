@@ -242,6 +242,8 @@ class opts(object):
                                  help='agent number')
         self.parser.add_argument('--vis_weight_mats', action='store_true',
                                  help='visualize the attention weight mats')
+        self.parser.add_argument('--polygon', action='store_true',
+                                 help='represent box with polygon')
 
     def parse(self, args=''):
         if args == '':
@@ -343,6 +345,8 @@ class opts(object):
                          'wh': 2 if not opt.cat_spec_wh else 2 * opt.num_classes}
             if opt.reg_offset:
                 opt.heads.update({'reg': 2})
+            if opt.polygon:
+                opt.head.update({'angle': 2})
         elif opt.task == 'multi_pose':
             # assert opt.dataset in ['coco_hp']
             opt.flip_idx = dataset.flip_idx
