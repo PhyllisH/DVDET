@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-27 23:32:33
+LastEditTime: 2021-07-01 18:31:11
 Description: 
 '''
 from __future__ import absolute_import
@@ -113,6 +113,7 @@ class MultiAgentDetDataset(data.Dataset):
         else:
             # cam_id = np.random.randint(low=0, high=5)
             cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
+            # print(cam_list)
             for cam, info in sample.items():
                 if cam.startswith('vehicles'):
                     continue

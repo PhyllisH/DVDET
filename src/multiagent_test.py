@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-27 22:00:17
+LastEditTime: 2021-07-04 13:45:21
 Description: 
 '''
 from __future__ import absolute_import
@@ -115,7 +115,7 @@ def prefetch_test(opt):
     time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge']
     avg_time_stats = {t: AverageMeter() for t in time_stats}
     for ind, (img_idx, pre_processed_images) in enumerate(data_loader):
-        ret = detector.run(pre_processed_images)
+        ret = detector.run(pre_processed_images, img_idx)
         for i in range(len(ret['results'])):
             img_id = img_idx[i]
             results[img_id.numpy().astype(np.int32)[0]] = ret['results'][i]

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-24 09:44:20
+LastEditTime: 2021-07-04 15:57:34
 Description: 
 '''
 
@@ -15,6 +15,8 @@ from numpy.lib.type_check import imag
 from progress.bar import Bar
 import time
 import torch
+import os
+import matplotlib.pyplot as plt
 
 try:
     from external.nms import soft_nms
@@ -104,8 +106,39 @@ class MultiAgentDetector(BaseDetector):
                     if bbox[4] > self.opt.vis_thresh:
                         debugger.add_coco_bbox(bbox[:4], j - 1, bbox[4], img_id='ctdet')
         debugger.show_all_imgs(pause=self.pause)
+    
+    def save_attn_weights(self, img_idx, images, output):
+        if 'weight_mats' not in output:
+            return
+        images = images.cpu().numpy().transpose(0,1,3,4,2)
+        img_ids = [str(x.cpu().numpy()[0]) for x in img_idx]
+        images = (((images * self.std) + self.mean) * 255.).astype('uint8')
+        b, num_agents, c, h, w = images.shape
+        weight_mats = output['weight_mats'][-1].cpu().numpy()  # (b, k_agents, q_agents, 1, h, w)
+        val_mats = output['val_mats'][-1].max(dim=-3)[0].cpu().numpy()  # (b, k_agents, q_agents, c, h, w)
+        root_dir = os.path.join(os.path.dirname(__file__), '../../../exp/multiagent_det', self.opt.exp_id, 'weight_mats_vis')
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        fig, axes = plt.subplots(num_agents*2+1, num_agents)
+        save_path = os.path.join(root_dir, '{}.png'.format('_'.join(img_ids)))
+        for j in range(num_agents):
+            axes[0,j].imshow(images[0,j][:,:,::-1])
+            axes[0,j].set_xticks([])
+            axes[0,j].set_yticks([])
+            
+        for j in range(num_agents):
+            for k in range(num_agents):
+                axes[j*2+1,k].imshow((val_mats[0,k,j]*255.).astype('uint8'))
+                axes[j*2+1,k].set_xticks([])
+                axes[j*2+1,k].set_yticks([])
 
-    def run(self, image_or_path_or_tensor, meta=None):
+                axes[j*2+2, k].imshow((weight_mats[0,k,j,0]*255.).astype('uint8'))
+                axes[j*2+2, k].set_xticks([])
+                axes[j*2+2, k].set_yticks([])
+        plt.savefig(save_path)
+        plt.close()
+
+    def run(self, image_or_path_or_tensor, img_idx=None, meta=None):
         load_time, pre_time, net_time, dec_time, post_time = 0, 0, 0, 0, 0
         merge_time, tot_time = 0, 0
         debugger = Debugger(dataset=self.opt.dataset, ipynb=(self.opt.debug == 3),
@@ -150,6 +183,9 @@ class MultiAgentDetector(BaseDetector):
 
             if self.opt.debug >= 2:
                 self.debug(debugger, images, dets, output, scale)
+            
+            if self.opt.vis_weight_mats:
+                self.save_attn_weights(img_idx, images, output)
 
             for i in range(len(dets)):
                 detections.append(self.post_process(dets[i:i+1], meta, scale))

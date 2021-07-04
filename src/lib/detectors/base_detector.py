@@ -79,6 +79,9 @@ class BaseDetector(object):
 
     def show_results(self, debugger, image, results):
         raise NotImplementedError
+    
+    def save_attn_weights(self, output, batch):
+        raise NotImplementedError
 
     def run(self, image_or_path_or_tensor, meta=None):
         load_time, pre_time, net_time, dec_time, post_time = 0, 0, 0, 0, 0

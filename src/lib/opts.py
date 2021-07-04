@@ -240,6 +240,8 @@ class opts(object):
                                  help='Local or Global')
         self.parser.add_argument('--num_agents', type=int, default=4,
                                  help='agent number')
+        self.parser.add_argument('--vis_weight_mats', action='store_true',
+                                 help='visualize the attention weight mats')
 
     def parse(self, args=''):
         if args == '':
