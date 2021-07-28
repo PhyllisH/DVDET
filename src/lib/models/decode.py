@@ -519,7 +519,7 @@ def ctdet_decode(heat, wh, reg=None, angle=None, cat_spec_wh=False, K=100):
         angle = angle.view(batch*K, 2)
         rot_bboxes = rotation_2d_torch(bboxes, angle)
         rot_bboxes = rot_bboxes.view(batch, K, 4, 2).view(batch, K, 8)
-        detections = torch.cat([bboxes, scores, clses], dim=2)
+        detections = torch.cat([rot_bboxes, scores, clses], dim=2)
     return detections
 
 def rotation_2d_torch(points, angles):

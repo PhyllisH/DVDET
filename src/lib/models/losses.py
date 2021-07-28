@@ -60,6 +60,9 @@ def _neg_loss(pred, gt):
     pos_loss = pos_loss.sum()
     neg_loss = neg_loss.sum()
 
+    # print('\npos: ', -pos_loss.detach().cpu().item(), num_pos.detach().cpu().item())
+    # print('neg: ', -neg_loss.detach().cpu().item(), '\n')
+
     if num_pos == 0:
         loss = loss - neg_loss
     else:

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-28 11:09:22
+LastEditTime: 2021-07-26 00:47:54
 Description: Convert the single-view dataformat to multi-view dataformat
 '''
 
@@ -33,6 +33,7 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 from transformation import *
 from visualize_coco_result import CoordTrans
+from copy import deepcopy
 
 '''
 GT:
@@ -264,6 +265,7 @@ def convert_multiview_coco():
                         cat_id = 1
                         vehicles_i = []
                         vehicles_g = []
+                        vehicles_g_corners = []
                         category_id = []
                         seg_img = cv2.imread(os.path.join(data_dir, os.path.dirname(sensor_record['filename']), os.path.basename(sensor_record['filename']).split('.')[0]+'_seg.png'))
                         for vehicle_cord in vehicle_cords:
@@ -271,7 +273,7 @@ def convert_multiview_coco():
                             vehicle_cord_img = global_points_to_image(vehicle_cord.copy()[:3,], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
                             if vehicle_cord_img.shape[-1] == 0:
                                 continue
-                            x, y, w, h = get_2d_bounding_box(vehicle_cord_img)
+                            x, y, w, h = get_2d_bounding_box(deepcopy(vehicle_cord_img))
                             # Check box
                             if x < 0 or y < 0 or (x + w) > W or (y + h) > H:
                                 continue
@@ -301,10 +303,17 @@ def convert_multiview_coco():
 
                             vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=800/500, scale_h=450/500)
                             x, y, w, h = get_2d_bounding_box(vehicle_grid[:3])
+                            polygon_xywhcs, corners = get_angle_polygon(deepcopy(vehicle_grid[:2,:4]))
+                            # print(corners)
+                            # print(polygon_xywhcs)
+                            # print(x, y, w, h)
+                            # print(p_x, p_y, p_w, p_h, p_cos, p_sin)
                             ann = { 'area': w * h,
                                     'iscrowd': 0,
                                     'image_id': image_id,
                                     'bbox': [x, y, w, h],
+                                    'polygon': polygon_xywhcs,
+                                    'corners': corners,
                                     'category_id': cat_id,
                                     'id': bbox_id,
                                     'ignore': ignore,
@@ -312,8 +321,11 @@ def convert_multiview_coco():
                             ret_g['annotations'].append(ann)
                             if not ignore:
                                 vehicles_g.append([x, y, w, h])
+                                vehicles_g_corners.append(corners)
+
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
+                        cur_UAV_sample['vehicles_g_corners'] = np.array(vehicles_g_corners)
                         cur_UAV_sample['category_id'] = np.array(category_id)
                         cur_sample_info['{}_{}'.format(UAV_cam, UAV_id)] = cur_UAV_sample
                 ret_s['samples'].append(cur_sample_info)

@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-07-04 13:45:21
+LastEditTime: 2021-07-22 17:13:26
 Description: 
 '''
 from __future__ import absolute_import
@@ -127,7 +127,10 @@ def prefetch_test(opt):
                 t, tm=avg_time_stats[t])
         bar.next()
     bar.finish()
-    dataset.run_eval(results, opt.save_dir)
+    if opt.polygon:
+        dataset.run_polygon_eval(results, opt.save_dir)
+    else:    
+        dataset.run_eval(results, opt.save_dir)
 
 
 if __name__ == '__main__':

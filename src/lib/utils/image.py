@@ -8,10 +8,13 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from matplotlib.pyplot import axis
 
 import numpy as np
 import cv2
 import random
+
+from numpy.lib.function_base import angle
 
 
 def flip(img):
@@ -114,6 +117,8 @@ def gaussian_radius(det_size, min_overlap=0.7):
     c3 = (min_overlap - 1) * width * height
     sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
     r3 = (b3 + sq3) / 2
+
+    # print('r1, r2, r3: ', r1, r2, r3)
     return min(r1, r2, r3)
 
 
@@ -199,6 +204,42 @@ def draw_msra_gaussian(heatmap, center, sigma):
         g[g_y[0]:g_y[1], g_x[0]:g_x[1]])
     return heatmap
 
+
+def draw_polygon_gaussian(heatmap, center, sigma, angle):
+    tmp_size = sigma * 3
+    mu_x = int(center[0] + 0.5)
+    mu_y = int(center[1] + 0.5)
+    w, h = heatmap.shape[0], heatmap.shape[1]
+    ul = [int(mu_x - tmp_size), int(mu_y - tmp_size)]
+    br = [int(mu_x + tmp_size + 1), int(mu_y + tmp_size + 1)]
+    if ul[0] >= h or ul[1] >= w or br[0] < 0 or br[1] < 0:
+        return heatmap
+    size = 2 * tmp_size + 1
+    x = np.arange(0, size, 1, np.float32)
+    y = x[:, np.newaxis]
+    x0 = y0 = size // 2
+    g = np.exp(- ((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma ** 2))
+    g_x = max(0, -ul[0]), min(br[0], h) - ul[0]
+    g_y = max(0, -ul[1]), min(br[1], w) - ul[1]
+    img_x = max(0, ul[0]), min(br[0], h)
+    img_y = max(0, ul[1]), min(br[1], w)
+    img_y_index = np.array(range(img_y[0], img_y[1])).reshape([-1, 1, 1]).repeat(img_x[1]-img_x[0], axis=1)
+    img_x_index = np.array(range(img_x[0], img_x[1])).reshape([1, -1, 1]).repeat(img_y[1]-img_y[0], axis=0)
+    img_points = np.concatenate([img_x_index, img_y_index], axis=-1)
+    g_y_index = np.array(range(g_y[0], g_y[1])).reshape([-1, 1, 1]).repeat(g_x[1]-g_x[0], axis=1)
+    g_x_index = np.array(range(g_x[0], g_x[1])).reshape([1, -1, 1]).repeat(g_y[1]-g_y[0], axis=0)
+    g_points = np.concatenate([g_y_index, g_x_index], axis=-1)
+    rotation = np.array([[angle[1], -angle[0]],
+                            [angle[0], angle[0]]])
+    points_rot = np.matmul(img_points - center, rotation) + center
+    points_rot = points_rot.astype(np.uint8)
+    for i in range(img_points.shape[0]):
+        for j in range(img_points.shape[1]):
+            heatmap[points_rot[i,j,1],points_rot[i,j,0]] = np.maximum(
+                heatmap[points_rot[i,j,1],points_rot[i,j,0]],
+                g[g_points[i,j,1],g_points[i,j,0]]
+            )
+    return heatmap
 
 def grayscale(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)

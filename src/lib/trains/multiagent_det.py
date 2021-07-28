@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-07-04 13:37:34
+LastEditTime: 2021-07-26 09:42:05
 Description: 
 '''
 
@@ -22,7 +22,9 @@ from utils.debugger import Debugger
 from utils.post_process import ctdet_post_process
 from utils.oracle_utils import gen_oracle_map
 from .base_trainer import BaseTrainer
-
+import time
+import os
+import cv2,kornia
 
 def _reorganize_batch(batch):
     reorg_batch = OrderedDict()
@@ -47,7 +49,7 @@ class CtdetLoss(torch.nn.Module):
     def forward(self, outputs, ori_batch):
         opt = self.opt
         batch = _reorganize_batch(ori_batch)
-        hm_loss, wh_loss, off_loss = 0, 0, 0
+        hm_loss, wh_loss, off_loss, angle_loss = 0, 0, 0, 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
@@ -67,6 +69,33 @@ class CtdetLoss(torch.nn.Module):
                     output['reg'].shape[3], output['reg'].shape[2])).to(opt.device)
 
             hm_loss += self.crit(output['hm'], batch['hm']) / opt.num_stacks
+            
+            # import ipdb; ipdb.set_trace()
+            # if not os.path.exists('train_vis'):
+            #     os.makedirs('train_vis')
+            # cur_time = time.time()
+            # c_b = output['hm'][0,0].detach().cpu().numpy()
+            # c_b = (c_b / (c_b.max()-c_b.min()) * 255.0).astype('uint8')[:,:,None]
+            # c_r = (batch['hm'][0,0]*255).detach().cpu().numpy().astype('uint8')[:,:,None]
+            # c_g = np.zeros_like(c_b)
+            # heatmap = np.concatenate([c_b, c_g, c_r], axis=-1)
+            # cv2.imwrite('train_vis/{}_pred_hm.png'.format(int(cur_time)), heatmap)
+
+            # save_img = (batch['input'][0].detach().cpu().numpy()*255).astype('uint8').transpose(1,2,0)
+            # cv2.imwrite('train_vis/{}_ori.png'.format(int(cur_time)), save_img)
+            # worldgrid2worldcoord_mat = np.array([[500/800.0, 0, -200], [0, 500/448.0, -250], [0, 0, 1]])
+            # cur_trans_mats = np.linalg.inv(batch['trans_mats'][0].detach().cpu().numpy() @ worldgrid2worldcoord_mat)
+            # data = kornia.image_to_tensor(save_img, keepdim=False)
+            # data_warp = kornia.warp_perspective(data.float(),
+            #                                     torch.tensor(cur_trans_mats).repeat([1, 1, 1]).float(),
+            #                                     dsize=(448, 800))
+            # # convert back to numpy
+            # img_warp = kornia.tensor_to_image(data_warp.byte())
+            # img_warp = cv2.resize(img_warp, dsize=(400, 224))
+            # img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
+            # cv2.imwrite('train_vis/{}_ori_warp.png'.format(int(cur_time)), img_warp)
+
+            
             if opt.wh_weight > 0:
                 if opt.dense_wh:
                     mask_weight = batch['dense_wh_mask'].sum() + 1e-4
@@ -82,15 +111,25 @@ class CtdetLoss(torch.nn.Module):
                     wh_loss += self.crit_reg(
                         output['wh'], batch['reg_mask'],
                         batch['ind'], batch['wh']) / opt.num_stacks
+            if opt.polygon and (opt.angle_weight > 0):
+                angle_loss += self.crit_reg(
+                        output['angle'], batch['reg_mask'],
+                        batch['ind'], batch['angle']) / opt.num_stacks
 
             if opt.reg_offset and opt.off_weight > 0:
                 off_loss += self.crit_reg(output['reg'], batch['reg_mask'],
                                           batch['ind'], batch['reg']) / opt.num_stacks
 
-        loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
-               opt.off_weight * off_loss
-        loss_stats = {'loss': loss, 'hm_loss': hm_loss,
-                      'wh_loss': wh_loss, 'off_loss': off_loss}
+        if opt.polygon and (opt.angle_weight > 0):
+            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
+                    opt.off_weight * off_loss + opt.angle_weight * angle_loss
+            loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                    'wh_loss': wh_loss, 'off_loss': off_loss, 'angle_loss': angle_loss}
+        else:
+            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
+                    opt.off_weight * off_loss
+            loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                        'wh_loss': wh_loss, 'off_loss': off_loss}
         return loss, loss_stats
 
 
@@ -100,6 +139,8 @@ class MultiAgentDetTrainer(BaseTrainer):
 
     def _get_losses(self, opt):
         loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
+        if opt.polygon and (opt.angle_weight > 0):
+            loss_states.append('angle_loss')
         loss = CtdetLoss(opt)
         return loss_states, loss
 

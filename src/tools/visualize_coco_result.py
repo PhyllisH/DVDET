@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-28 15:56:35
+LastEditTime: 2021-07-26 20:03:16
 Description: 
 '''
 from __future__ import absolute_import
@@ -25,7 +25,7 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 import sys
 sys.path.append('./')
-from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord
+from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord, get_2d_polygon
 import kornia
 import torch
 
@@ -38,9 +38,10 @@ camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 0.0, 1.0]]
 camera_intrinsic = np.array(camera_intrinsic)
 # worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -100], [0, 0, 1]])
-scale_h = 450/500
-scale_w = 800/500
+scale_h = 450/500 * 4
+scale_w = 800/500 * 4
 worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -200], [0, 1/scale_h, -250], [0, 0, 1]])
+default_worldgrid2worldcoord_mat = np.array([[500/800, 0, -200], [0, 500/450, -250], [0, 0, 1]])
 image_size = (int(500*scale_h), int(500*scale_w))
 # image_size = (int(500*scale_h), int(300*scale_w))
 # image_size = (225, 400)
@@ -48,7 +49,7 @@ image_size = (int(500*scale_h), int(500*scale_w))
 
 def BoxCoordTrans(coord, tranlation, rotation, mode='L2G'):
     project_mat = get_imgcoord_matrices(tranlation.copy(), rotation.copy(), camera_intrinsic)
-    project_mat = project_mat @ worldgrid2worldcoord_mat
+    project_mat = project_mat @ default_worldgrid2worldcoord_mat
     if mode == 'L2G':
         project_mat = np.linalg.inv(project_mat)
     coord = np.concatenate([coord[:2], np.ones([1, coord.shape[1]])], axis=0)
@@ -136,9 +137,20 @@ def CoordTrans(image, translation, rotation, mode='L2G'):
 def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1):
     for anno in annos:
         if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
-            bbox = anno['bbox']
-            x, y, w, h = bbox
-            image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, 1)
+            if 'bbox' in anno:
+                bbox = anno['bbox']
+                if len(bbox) == 4:
+                    bbox = [x*4 for x in bbox]
+                    x, y, w, h = bbox
+                    image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, 1)
+                else:
+                    polygon = np.array(get_2d_polygon(np.array(bbox[:8]).reshape([4,2]).T)).reshape([4,2])
+                    polygon = polygon * 4
+                    image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
+            else:
+                polygon = np.array(anno['corners'][:8]).reshape([4,2])
+                polygon = polygon * 4
+                image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
     return image
 
 def xywh2polygon(bbox):
@@ -153,9 +165,16 @@ def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=
     # ori_image = image.copy().mean(axis=-1)
     for anno in annos:
         if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
-            bbox = anno['bbox']
-            polygon = xywh2polygon(bbox)    # [2, 4]
+            if 'bbox' in anno:
+                bbox = anno['bbox']
+                if len(bbox) == 4:
+                    polygon = xywh2polygon(bbox)    # [2, 4]
+                else:
+                    polygon = np.array(bbox[:8]).reshape([4,2]).T
+            else:
+                polygon = np.array(anno['corners'][:8]).reshape([4,2]).T
             bbox_g = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode)
+            bbox_g = np.array(get_2d_polygon(bbox_g[:2])).reshape([4,2])
             # bbox_g_back = BoxCoordTrans(bbox_g.copy(), tranlation, rotation, mode='G2L')
             # print('Diff: ', np.abs(bbox_g_back[:2]-polygon).sum())
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -163,7 +182,7 @@ def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=
             # bbox_g = WorldCoord2WorldGrid(bbox_g[:2])
             # print('bbox_g: ', bbox_g)
             # print('x: {}-{}, y: {}-{}'.format(ori_image.nonzero()[1].min(), ori_image.nonzero()[1].max(), ori_image.nonzero()[0].min(), ori_image.nonzero()[0].max()))
-            image = cv2.polylines(image, pts=np.int32([bbox_g[:2].T.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
+            image = cv2.polylines(image, pts=np.int32([bbox_g.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
     # cv2.imwrite('test.png', image)
     # import ipdb; ipdb.set_trace()
     return image
@@ -192,12 +211,15 @@ def visualize_result():
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results_LateFused.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_NO_MESSAGE/results_BEV.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results_LateFused.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_SINGLE_GLOBAL_MESSAGE/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransImage2/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransAll/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_NO_MESSAGE_FeatTransAll_GlobalCoord/trainval_results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_Polygon_debug/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_Polygon_UAVGT/results.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_Polygon_FeatMap_800_450/results.json')
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
     res_annos_all = json.load(open(result_path))

@@ -80,7 +80,102 @@ def get_2d_bounding_box(cords):
     y_min = min(cords[1])
     y_max = max(cords[1])
     return x_min, y_min, x_max - x_min, y_max - y_min
+
+def get_2d_polygon(cords):
+    """
+    transform the 3D bounding box to 2D
+    :param cords: <3, 8> the first channel: x, y, z; the second channel is the points amount
+    :return <4, > 2D bounding box (x, y, w, h)
+    """
+    x_sort = np.argsort(cords[0])
+    lefts = cords[:2, x_sort[:2]]
+    rights = cords[:2, x_sort[2:]]
+    if abs(lefts[1,0] - lefts[1,1]) > 1e-6:
+        lefts = lefts[:, np.argsort(lefts[1,:])]
+    if abs(rights[1,0] - rights[1,1]) > 1e-6:
+        rights = rights[:, np.argsort(rights[1,:])[::-1]]
+    ordered_polygon = list(np.concatenate([lefts, rights], axis=-1).T.reshape(-1,))
+    return ordered_polygon
+
+def get_angle_polygon(polygon):
+    """
+    transform the 2D polygon to (x, y, w, h, cos, sin)
+    :param polygon: <3, 8> the first channel: x, y, z; the second channel is the points amount
+    :return <6, > 2D bounding box (x, y, w, h, cos, sin)
+    """
+    def _nor_theta(theta):
+        if theta > math.radians(45):
+            theta -= math.radians(90)
+            theta = _nor_theta(theta)
+        elif theta <= math.radians(-45):
+            theta += math.radians(90)
+            theta = _nor_theta(theta)
+        return theta
+
+    def _calc_bearing(point1, point2):
+        x1, y1 = point1
+        x2, y2 = point2
+        theta = math.atan2(y2 - y1, x2 - x1)
+        theta = _nor_theta(theta)
+        return theta
     
+    def _get_corners(polygon):
+        x_sort = np.argsort(polygon[0])
+        lefts = polygon[:, x_sort[:2]]
+        rights = polygon[:, x_sort[2:]]
+        if abs(lefts[1,0] - lefts[1,1]) > 1e-6:
+            lefts = lefts[:, np.argsort(lefts[1,:])]
+        if abs(rights[1,0] - rights[1,1]) > 1e-6:
+            rights = rights[:, np.argsort(rights[1,:])[::-1]]
+        ordered_polygon = list(np.concatenate([lefts, rights], axis=-1).reshape(-1,))
+        return ordered_polygon
+
+    corners = np.array(_get_corners(polygon)).reshape(2,4).T    # (4,2)
+    center = np.mean(np.array(corners), 0)
+    theta = _calc_bearing(corners[0], corners[1])
+    rotation = np.array([[np.cos(theta), -np.sin(theta)],
+                        [np.sin(theta), np.cos(theta)]])
+    out_points = np.matmul(corners - center, rotation) + center
+    x, y = list(out_points[0, :])
+    w, h = list(out_points[2, :] - out_points[0, :])
+
+    # from matplotlib import pyplot as plt
+    # from shapely.geometry.polygon import Polygon
+    # from descartes import PolygonPatch
+    # fig = plt.figure(1, figsize=(5,5), dpi=90)
+    # corners = corners * 0.05
+    # print(corners)
+    # ring_mixed = Polygon([tuple(corners[0]), tuple(corners[1]), tuple(corners[2]), tuple(corners[3])])
+    # ax = fig.add_subplot(111)
+    # ring_patch = PolygonPatch(ring_mixed)
+    # ax.add_patch(ring_patch)
+    # ax.set_title('Filled Polygon')
+    # xrange = [int(corners[:,0].min())-1, int(corners[:,0].max())+1]
+    # yrange = [int(corners[:,1].min())-1, int(corners[:,1].max())+1]
+    # ax.set_xlim(*xrange)
+    # ax.set_xticks(list(range(*xrange)) + [xrange[-1]])
+    # ax.set_ylim(*yrange)
+    # ax.set_yticks(list(range(*yrange)) + [yrange[-1]])
+    # ax.set_aspect(1)
+    # plt.savefig('corner_polygon.png')
+    # fig = plt.figure(1, figsize=(5,5), dpi=90)
+    # out_points = out_points * 0.05
+    # print(out_points)
+    # ring_mixed = Polygon([tuple(out_points[0]), tuple(out_points[1]), tuple(out_points[2]), tuple(out_points[3])])
+    # ax = fig.add_subplot(111)
+    # ring_patch = PolygonPatch(ring_mixed)
+    # ax.add_patch(ring_patch)
+    # xrange = [int(out_points[:,0].min())-1, int(out_points[:,0].max())+1]
+    # yrange = [int(out_points[:,1].min())-1, int(out_points[:,1].max())+1]
+    # ax.set_xlim(*xrange)
+    # ax.set_xticks(list(range(*xrange)) + [xrange[-1]])
+    # ax.set_ylim(*yrange)
+    # ax.set_yticks(list(range(*yrange)) + [yrange[-1]])
+    # ax.set_aspect(1)
+    # plt.savefig('trans_polygon.png')
+    out_points = list(out_points.reshape(-1,))
+    return [x, y, w, h, np.sin(theta), np.cos(theta)], out_points
+
 def global_points_to_image(global_points, translation, rotation, camera_intrinsic):
     """
     transform global points (x,y,z) to image (h,w,1)

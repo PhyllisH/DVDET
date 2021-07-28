@@ -68,7 +68,7 @@ class opts(object):
                                       '0 for no conv layer'
                                       '-1 for default setting: '
                                       '64 for resnets and 256 for dla.')
-        self.parser.add_argument('--down_ratio', type=int, default=4,
+        self.parser.add_argument('--down_ratio', type=float, default=4,
                                  help='output stride. Currently only supports 4.')
 
         # input
@@ -162,6 +162,8 @@ class opts(object):
                                  help='loss weight for keypoint local offsets.')
         self.parser.add_argument('--wh_weight', type=float, default=0.1,
                                  help='loss weight for bounding box size.')
+        self.parser.add_argument('--angle_weight', type=float, default=1,
+                                 help='loss weight for rotation (angle).')
         # multi_pose
         self.parser.add_argument('--hp_weight', type=float, default=1,
                                  help='loss weight for human pose offset.')
@@ -266,7 +268,12 @@ class opts(object):
 
         if opt.head_conv == -1:  # init default head_conv
             opt.head_conv = 256 if 'dla' in opt.arch else 64
-        opt.pad = 127 if 'hourglass' in opt.arch else 31
+        if 'hourglass' in opt.arch:
+            opt.pad = 127 
+        elif 'multiagent_det' in opt.arch:
+            opt.pad = 0
+        else:
+            opt.pad = 31
         opt.num_stacks = 2 if opt.arch == 'hourglass' else 1
 
         if opt.trainval:
@@ -312,8 +319,8 @@ class opts(object):
         input_w = opt.input_res if opt.input_res > 0 else input_w
         opt.input_h = opt.input_h if opt.input_h > 0 else input_h
         opt.input_w = opt.input_w if opt.input_w > 0 else input_w
-        opt.output_h = opt.input_h // opt.down_ratio
-        opt.output_w = opt.input_w // opt.down_ratio
+        opt.output_h = int(opt.input_h // opt.down_ratio)
+        opt.output_w = int(opt.input_w // opt.down_ratio)
         opt.input_res = max(opt.input_h, opt.input_w)
         opt.output_res = max(opt.output_h, opt.output_w)
 
@@ -346,7 +353,7 @@ class opts(object):
             if opt.reg_offset:
                 opt.heads.update({'reg': 2})
             if opt.polygon:
-                opt.head.update({'angle': 2})
+                opt.heads.update({'angle': 2})
         elif opt.task == 'multi_pose':
             # assert opt.dataset in ['coco_hp']
             opt.flip_idx = dataset.flip_idx

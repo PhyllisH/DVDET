@@ -1,13 +1,12 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-06-28 11:20:40
+LastEditTime: 2021-07-25 20:21:05
 Description: 
 '''
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from ipdb.__main__ import set_trace
 
 import pycocotools.coco as coco
 from pycocotools.cocoeval import COCOeval
@@ -17,6 +16,13 @@ import os
 import pickle as pkl
 
 import torch.utils.data as data
+import sys
+
+sys.path.append(__file__)
+from .test_eval import run_polygon_eval
+
+sys.path.append(os.path.join(__file__, '..'))
+from utils.eval_utils import eval_map
 
 
 class MULTIAGENTAIRSIMCAM(data.Dataset):
@@ -102,14 +108,18 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             for cls_ind in all_bboxes[image_id]:
                 category_id = self._valid_ids[cls_ind - 1]
                 for bbox in all_bboxes[image_id][cls_ind]:
-                    # print(bbox)
-                    # print(type(bbox))
-                    # print(bbox[0])
-                    bbox[2] -= bbox[0]
-                    bbox[3] -= bbox[1]
-                    score = bbox[4]
-                    # bbox_out = list(map(self._to_float, list(bbox[0:4])))
-                    bbox_out = [float("{:.2f}".format(bbox[i])) for i in range(4)]
+                    if len(bbox) > 5:
+                        bbox_out = [float("{:.2f}".format(bbox[i])) for i in range(len(bbox-1))]
+                        score = bbox[-1]
+                    else:
+                        # print(bbox)
+                        # print(type(bbox))
+                        # print(bbox[0])
+                        bbox[2] -= bbox[0]
+                        bbox[3] -= bbox[1]
+                        score = bbox[4]
+                        # bbox_out = list(map(self._to_float, list(bbox[0:4])))
+                        bbox_out = [float("{:.2f}".format(bbox[i])) for i in range(4)]
 
                     detection = {
                         "image_id": int(image_id),
@@ -117,9 +127,6 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                         "bbox": bbox_out,
                         "score": float("{:.2f}".format(score))
                     }
-                    if len(bbox) > 5:
-                        extreme_points = list(map(self._to_float, bbox[5:13]))
-                        detection["extreme_points"] = extreme_points
                     detections.append(detection)
         return detections
 
@@ -141,3 +148,7 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         coco_eval.evaluate()
         coco_eval.accumulate()
         coco_eval.summarize()
+    
+    def run_polygon_eval(self, results, save_dir):
+        self.save_results(results, save_dir)
+        run_polygon_eval(self.annot_path_cocoformat, '{}/results.json'.format(save_dir))

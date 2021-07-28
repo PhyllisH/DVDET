@@ -1,7 +1,7 @@
 '''
 Author: yhu
 Contact: phyllis1sjtu@outlook.com
-LastEditTime: 2021-07-04 18:17:11
+LastEditTime: 2021-07-26 19:59:23
 Description: 
 '''
 
@@ -26,7 +26,7 @@ except:
 from models.decode import ctdet_decode
 from models.utils import flip_tensor
 from utils.image import get_affine_transform
-from utils.post_process import ctdet_post_process
+from utils.post_process import ctdet_post_process, polygon_nms
 from utils.debugger import Debugger
 
 from .base_detector import BaseDetector
@@ -63,8 +63,9 @@ class MultiAgentDetector(BaseDetector):
             dets.copy(), [meta['c']], [meta['s']],
             meta['out_height'], meta['out_width'], self.opt.num_classes)
         for j in range(1, self.num_classes + 1):
-            dets[0][j] = np.array(dets[0][j], dtype=np.float32).reshape(-1, 5)
-            dets[0][j][:, :4] /= scale
+            dets[0][j] = np.array(dets[0][j], dtype=np.float32)
+            dets[0][j] = dets[0][j].reshape(-1, dets[0][j].shape[-1])
+            dets[0][j][:, :(dets[0][j].shape[-1]-1)] /= scale
         return dets[0]
 
     def merge_outputs(self, detections):
@@ -73,14 +74,17 @@ class MultiAgentDetector(BaseDetector):
             results[j] = np.concatenate(
                 [detection[j] for detection in detections], axis=0).astype(np.float32)
             if len(self.scales) > 1 or self.opt.nms:
-                soft_nms(results[j], Nt=0.5, method=2)
+                if results[j].shape[-1] > 6:
+                    polygon_nms(results[j], 0.5)
+                else:
+                    soft_nms(results[j], Nt=0.5, method=2)
         scores = np.hstack(
-            [results[j][:, 4] for j in range(1, self.num_classes + 1)])
+            [results[j][:, -1] for j in range(1, self.num_classes + 1)])
         if len(scores) > self.max_per_image:
             kth = len(scores) - self.max_per_image
             thresh = np.partition(scores, kth)[kth]
             for j in range(1, self.num_classes + 1):
-                keep_inds = (results[j][:, 4] >= thresh)
+                keep_inds = (results[j][:, -1] >= thresh)
                 results[j] = results[j][keep_inds]
         return results
 
