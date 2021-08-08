@@ -976,6 +976,7 @@ class DLASeg(nn.Module):
         x = self.base(images)
         x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
+        scale = 4
         if warp_image:
             global_x = x
         else:
@@ -987,10 +988,10 @@ class DLASeg(nn.Module):
 
                 # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
                 # uav_i --> global coord
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*4), 0, -200], [0, 500/(h*4), -250], [0, 0, 1]])).to(trans_mats.device)
+                worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(trans_mats.device)
                 feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
                 cur_trans_mats = torch.inverse(trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*4, w*4)) # (b*num_agents, c, h, w)
+                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
                 # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
                 global_x.append(global_feat)
                 trans_mats_list.append(cur_trans_mats)

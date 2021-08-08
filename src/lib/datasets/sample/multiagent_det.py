@@ -83,7 +83,7 @@ class MultiAgentDetDataset(data.Dataset):
             return ordered_polygon
         
         corners = np.array(_get_corners(polygon)).reshape(2,4).T    # (4,2)
-        # print(corners)
+        # print('corners: ', corners)
         center = np.mean(np.array(corners), 0)
         theta = _calc_bearing(corners[0], corners[1])
         rotation = np.array([[np.cos(theta), -np.sin(theta)],
@@ -94,6 +94,7 @@ class MultiAgentDetDataset(data.Dataset):
         # print(h, w)
         # h, w = np.sort(np.sqrt(np.square(corners[1:] - corners[0:1].repeat(3, axis=0)).sum(axis=-1)), axis=-1)[:2]
         # print(h, w)
+        # print([center[0], center[1], w, h, np.sin(tsheta), np.cos(theta)])
         return [center[0], center[1], w, h, np.sin(theta), np.cos(theta)]
 
     def _get_border(self, border, size):
@@ -219,25 +220,27 @@ class MultiAgentDetDataset(data.Dataset):
             for k in range(num_objs):
                 cls_id = int(self.cat_ids[category_ids[k]])
                 if self.opt.coord == 'Global':
-                    # ########## Get BEV Global coord from the transformation of UAV rectangle #####
-                    bbox = self._coco2polygon(objs_i[k])  # (2, 4)
-                    if flipped:
-                        bbox[0] = width - bbox[0] - 1
-                    coord = np.concatenate([bbox, np.ones([1, bbox.shape[-1]])], axis=0)  # (3, 4)
-                    cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
-                    coord_warp = cur_trans_mats @ coord
-                    coord_warp = coord_warp / coord_warp[2, :]
-                    # print('UAV2BEV: ', coord_warp)
-                    coord_warp = trans_output @ coord_warp  # (3, 4)
-                    # print('UAV2BEV image: ', coord_warp)
+                    # # ########## Get BEV Global coord from the transformation of UAV rectangle #####
+                    # print('----------------- UAV2BEV ----------------')
+                    # bbox = self._coco2polygon(objs_i[k])  # (2, 4)
+                    # if flipped:
+                    #     bbox[0] = width - bbox[0] - 1
+                    # coord = np.concatenate([bbox, np.ones([1, bbox.shape[-1]])], axis=0)  # (3, 4)
+                    # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+                    # coord_warp = cur_trans_mats @ coord
+                    # coord_warp = coord_warp / coord_warp[2, :]
+                    # # print('UAV2BEV: ', coord_warp)
+                    # coord_warp = trans_output @ coord_warp  # (3, 4)
+                    # # print('UAV2BEV image: ', coord_warp)
 
                     # ########## Get BEV Global coord #####
-                    # # print(objs[k])
-                    # coord = np.array(objs[k]).reshape([4,2])
-                    # # print('BEV: ', coord)
-                    # coord = np.concatenate([coord.T, np.ones([1, coord.shape[0]])], axis=0)
-                    # coord_warp = trans_output @ coord
-                    # # print('BEV image: ', coord_warp)
+                    # print('----------------- BEV ----------------')
+                    # print(objs[k])
+                    coord = np.array(objs[k]).reshape([4,2])
+                    # print('BEV: ', coord)
+                    coord = np.concatenate([coord.T, np.ones([1, coord.shape[0]])], axis=0)
+                    coord_warp = trans_output @ coord
+                    # print('BEV image: ', coord_warp)
                     if self.opt.polygon:
                         bbox = self._get_polygon_gt(coord_warp[:2]) # (x,y,w,h,sin,cos)
                         gt_polygon = coord_warp[:2]

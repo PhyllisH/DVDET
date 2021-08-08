@@ -61,7 +61,6 @@ def keep_single_polygon(polygon, score_thre=0.3):
         return False
 
 
-
 def toevalformat(annos):
     image_idx = list(annos.keys())
     image_idx.sort()
@@ -79,9 +78,9 @@ def toevalformat(annos):
                 category_id = category_idx[j]
                 if category_id in annos[image_id]:
                     if len(annos[image_id][category_id]) > 1:
-                        annos[image_id][category_id] = np.concatenate([np.array(x[:8]).reshape([1, 8]) for x in annos[image_id][category_id]], axis=0)
+                        annos[image_id][category_id] = np.concatenate([np.array(x).reshape([1, len(x)]) for x in annos[image_id][category_id]], axis=0)
                     else:
-                        annos[image_id][category_id] = np.array(annos[image_id][category_id][:8]).reshape([1, 8])
+                        annos[image_id][category_id] = np.array(annos[image_id][category_id]).reshape([1, len(annos[image_id][category_id])])
                     annotations[i].append(filter_polygon(annos[image_id][category_id]))
                 else:
                     annotations[i].append([])
@@ -104,10 +103,15 @@ def run_polygon_eval(anno_path_cocoformat, det_path_cocoformat):
     det_evalformat = toevalformat(det_evalformat)
     gt_evalformat = toevalformat(gt_evalformat)
 
-    eval_map(det_evalformat, gt_evalformat, mode='area', nproc=8)
+    print('####################### IOU 0.5 ####################### ')
+    eval_map(det_evalformat, gt_evalformat, iou_thr=0.5, mode='area', nproc=8)
+    # eval_map(det_evalformat, gt_evalformat, iou_thr=0.5, mode='ap', nproc=8)
 
+    print('####################### IOU 0.25 ####################### ')
+    eval_map(det_evalformat, gt_evalformat, iou_thr=0.25, mode='area', nproc=8)
+    # eval_map(det_evalformat, gt_evalformat, iou_thr=0.25, mode='ap', nproc=8)
 
 if __name__ == '__main__':
     anno_path_cocoformat = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/multiagent_annotations/val_instances_global.json'
-    det_path_cocoformat = '/GPFS/data/yhu/code/CoDet/exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_Polygon/results.json'
+    det_path_cocoformat = '/GPFS/data/yhu/code/CoDet/exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_Polygon_FeatMap_800_450/results.json'
     # run_polygon_eval(anno_path_cocoformat, det_path_cocoformat)

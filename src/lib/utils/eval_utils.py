@@ -192,7 +192,8 @@ def eval_map(det_results,
 
     num_imgs = len(det_results)
     num_classes = len(det_results[0])  # positive class num
-    area_ranges = [[0 ** 2, 1e5 ** 2], [0 ** 2, 32 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
+    # area_ranges = [[0 ** 2, 1e5 ** 2], [0 ** 2, 32 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
+    area_ranges = [[0 ** 2, 1e5 ** 2]]
     # areaRngLbl = ['all', 'small', 'medium', 'large']
     num_scales = len(area_ranges) if area_ranges is not None else 1
 
