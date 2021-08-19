@@ -139,37 +139,84 @@ def UAVtoUAV(UAV_I1, T1, T2):
 #              'scene_85', 'scene_86', 'scene_89', 'scene_91', 'scene_93', 'scene_96',
 #              'scene_115', 'scene_117']
 
-train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 
-               'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
-               'scene_13', 'scene_14']
-val_split = [ 'scene_5']
+# train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 
+#                'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
+#                'scene_13', 'scene_14']
+# val_split = [ 'scene_5']
+
+train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
+               'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
+               'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
+               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
+               'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+
+val_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
+
+town_config = OrderedDict()
+town_config[0] = {
+    'world_X': 500,
+    'world_Y': 500,
+    'world_X_left': 200,
+    'world_Y_left': 250
+}
+town_config[1] = {
+    'world_X': 1200,
+    'world_Y': 600,
+    'world_X_left': 400,
+    'world_Y_left': 200
+}
+town_config[2] = {
+    'world_X': 900,
+    'world_Y': 900,
+    'world_X_left': 400,
+    'world_Y_left': 500
+}
 
 
-def convert_multiview_coco():
-    # data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
-    # data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
-    data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
-    DEBUG = False
-    nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+def convert_multiview_coco(town_id=1, height=40):
+    ##################### Get category info ###############
+    cats = ['car']
+    cat_info = []
+    for i, cat in enumerate(cats):
+        cat_info.append({'supercategory': 'vehicle', 'name': cat, 'id': i + 1})
+    #######################################################
 
-    cats = ['car', 'car_overlook']
-    splits = ['train', 'val']
-    scene_split = {'train': train_split, 'val': val_split}
-    cat_ids = {cat: i + 1 for i, cat in enumerate(cats)}
-
+    ########## Camera intrinsic and image settings ########
     F = 400  # focal
     H = 450  # height
     W = 800  # width
     camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
+    world_X = town_config[town_id]['world_X']
+    world_Y = town_config[town_id]['world_Y']
+    image_H = 450
+    image_W = 800
+    world_X_left = town_config[town_id]['world_X_left']
+    world_Y_left = town_config[town_id]['world_Y_left']
+    worldgrid2worldcoord_mat = np.array([[world_X, 0, -world_X_left], [0, world_Y, -world_Y_left], [0, 0, 1]])
+    # worldgrid2worldcoord_mat = np.array([[world_X/image_W, 0, -world_X_left], [0, world_Y/image_H, -world_Y_left], [0, 0, 1]])
     # worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -250], [0, 0, 1]])
+    #######################################################
 
-    cat_info = []
-    for i, cat in enumerate(cats):
-        cat_info.append({'supercategory': 'vehicle', 'name': cat, 'id': i + 1})
+    # data_dir = 'C:/Users/35387/Desktop/airsim_camera_demo'
+    # data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
+    # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2/'
+    # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_60m/'
+    data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m/'
+    nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
+    # data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
+    # nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+
+    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations')):
+        os.makedirs(os.path.join(data_dir, 'multiagent_annotations'))
+
+    save_dir = data_dir
+    splits = ['train', 'val']
+    scene_split = {'train': train_split, 'val': val_split}
     image_id = 0
     bbox_id = 0
+
     for split in splits:
         ret_i = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
         ret_g = {'images': [], "type": "instances", 'annotations': [], 'categories': cat_info}
@@ -216,7 +263,7 @@ def convert_multiview_coco():
                         cur_UAV_sample['rotation'] = calibrated_record["rotation"].copy()
                         cur_UAV_sample['trans_mat'] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                       calibrated_record["rotation"].copy(),
-                                                      camera_intrinsic)
+                                                      camera_intrinsic) @ worldgrid2worldcoord_mat
                         im_position = calibrated_record["translation"]
                         im_position[2] = -im_position[2]
                         im_rotation = calibrated_record["rotation"]
@@ -301,7 +348,7 @@ def convert_multiview_coco():
                             # print('Diff: ', np.abs(vehicle_cord_r2[:2] - vehicle_cord[:2]).sum())
                             # print('Diff: ', np.abs(img_coords2[:2] - img_coords[:2]).sum())
 
-                            vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=800/500, scale_h=450/500)
+                            vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=image_W/world_X, scale_h=image_H/world_Y, world_Y_left=world_Y_left, world_X_left=world_X_left)
                             x, y, w, h = get_2d_bounding_box(vehicle_grid[:3])
                             polygon_xywhcs, corners = get_angle_polygon(deepcopy(vehicle_grid[:2,:4]))
                             # print(corners)
@@ -336,12 +383,36 @@ def convert_multiview_coco():
         print("# images: ", len(ret_i['images']))
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
-        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances.json'.format(split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_global.json'.format(split))
-        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_sample.pkl'.format(split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances_global.json'.format(height, split))
+        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances_sample.pkl'.format(height, split))
         json.dump(ret_i, open(out_path, 'w'))
         json.dump(ret_g, open(out_global_path, 'w'))
         pkl.dump(ret_s, open(out_sample_path, 'wb')) 
 
+def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/'):
+    splits = ['train', 'val']
+    for split in splits:
+        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances.json'.format(split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_global.json'.format(split))
+        for anno_path in [out_path, out_global_path]:
+            with open(anno_path, 'r') as f:
+                annos = json.load(f)
+            annos_noignore = []
+            for anno in tqdm(annos['annotations']):
+                if anno['ignore'] == 0:
+                    annos_noignore.append(anno)
+            annos['annotations'] = annos_noignore
+            with open(os.path.join(os.path.dirname(anno_path), os.path.basename(anno_path).split('.')[0]+'_woignoredbox.json'), 'w') as f:
+                json.dump(annos, f)
+
 if __name__ == '__main__':
-    convert_multiview_coco()
+    # convert_multiview_coco(height=40)
+    # convert_multiview_coco(height=60)
+    # convert_multiview_coco(height=80)
+    # convert_multiview_coco(height=100)
+    # convert_multiview_coco(town_id=0, height=40)
+    convert_multiview_coco(town_id=2, height=40)
+    # convert_multiview_coco(town_id=2, height=60)
+    # convert_multiview_coco(town_id=2, height=80)
+    # convert_multiview_coco()

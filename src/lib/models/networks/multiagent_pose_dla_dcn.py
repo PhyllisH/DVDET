@@ -968,7 +968,8 @@ class DLASeg(nn.Module):
         if warp_image:
             print('Warp image')
             trans_mats = trans_mats.view(b*num_agents, 3, 3)
-            worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/img_w, 0, -200], [0, 500/img_h, -250], [0, 0, 1]])).to(trans_mats.device)
+            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/img_w, 0, -200], [0, 500/img_h, -250], [0, 0, 1]])).to(trans_mats.device)
+            worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/img_w, 0, 0], [0, 1/img_h, 0], [0, 0, 1]])).to(trans_mats.device)
             cur_trans_mats = torch.inverse(trans_mats @ worldgrid2worldcoord_mat)
             images = kornia.warp_perspective(images, cur_trans_mats, dsize=(img_h, img_w))
         
@@ -988,7 +989,8 @@ class DLASeg(nn.Module):
 
                 # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
                 # uav_i --> global coord
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(trans_mats.device)
+                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(trans_mats.device)
+                worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(trans_mats.device)
                 feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
                 cur_trans_mats = torch.inverse(trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
                 global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)

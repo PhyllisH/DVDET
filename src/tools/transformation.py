@@ -296,9 +296,9 @@ def get_worldcoord_from_imagecoord(image_coord, tranlation, rotation, camera_int
         world_coord = world_coord / world_coord[2, :]
     return world_coord
 
-def WorldCoord2WorldGrid(coord, scale_w=1, scale_h=1):
-    x = (coord[0:1] + 200) * scale_w
-    y = (coord[1:2] + 250) * scale_h
+def WorldCoord2WorldGrid(coord, scale_w=1, scale_h=1, world_X_left=200, world_Y_left=250):
+    x = (coord[0:1] + world_X_left) * scale_w
+    y = (coord[1:2] + world_Y_left) * scale_h
     return np.concatenate([x, y], axis=0)
 
 def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worldgrid2worldcoord_mat):

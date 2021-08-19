@@ -36,15 +36,43 @@ class PrefetchDataset(torch.utils.data.Dataset):
         self.pre_process_func = pre_process_func
         self.opt = opt
     
+    # def load_image_func(self, index):
+    #     sample_id = index // 25
+    #     cam_id = index % 25
+    #     images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
+    #     images = []
+    #     trans_mat_list = []
+    #     image_idx = []
+    #     cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
+    #     cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
+    #     for cam, info in self.samples[sample_id].items():
+    #         if cam.startswith('vehicles'):
+    #             continue
+    #         # else:
+    #         # elif cam.startswith('F'):
+    #         # elif cam.endswith(str(cam_id)):
+    #         if cam in cam_list:
+    #             images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+    #             image_idx.append(info['image_id'])
+    #             trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32))
+    #     trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
+    #     return images, image_idx, trans_mats
+
     def load_image_func(self, index):
-        sample_id = index // 25
-        cam_id = index % 25
+        sample_id = index // 5
+        img_dir = self.img_dir[sample_id] if len(self.img_dir) == len(self.samples) else self.img_dir
+        cam_id = index % 5
         images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
         images = []
         trans_mat_list = []
         image_idx = []
         cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
-        cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
+        # cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
+        # sensor = cams_list[cam_id].split('_')[1]
+        sensors = ['FRONT', 'BOTTOM', 'LEFT', 'RIGHT', "BACK"]
+        sensor = sensors[cam_id]
+        cam_list = [x for x in cams_list if sensor in x] + [cams_list[cam_id]]
+        
         for cam, info in self.samples[sample_id].items():
             if cam.startswith('vehicles'):
                 continue
@@ -52,7 +80,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
             # elif cam.startswith('F'):
             # elif cam.endswith(str(cam_id)):
             if cam in cam_list:
-                images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+                images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
                 image_idx.append(info['image_id'])
                 trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
@@ -60,10 +88,11 @@ class PrefetchDataset(torch.utils.data.Dataset):
     
     def load_sample_func(self, index):
         info = self.samples[index]
+        img_dir = self.img_dir[index] if len(self.img_dir) == len(self.samples) else self.img_dir
         images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
         images = []
         image_idx = []
-        images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+        images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
         image_idx.append(info['image_id'])
         trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]
         return images, image_idx, trans_mats
@@ -88,7 +117,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
         if 'NO_MESSAGE' in self.opt.message_mode:
             return len(self.samples)
         else:
-            return len(self.samples)*25
+            return len(self.samples)*5
 
 
 def prefetch_test(opt):

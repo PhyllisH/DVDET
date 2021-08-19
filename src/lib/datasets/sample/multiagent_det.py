@@ -141,9 +141,9 @@ class MultiAgentDetDataset(data.Dataset):
         
         return c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w
 
-    def load_sample(self, sample, num_images=8):
+    def load_sample(self, sample, img_dir, num_images=8):
         images_key = 'image'
-        vehicles_key = 'vehicles_g_corners' if self.opt.polygon else 'vehicles_i'  
+        vehicles_key = 'vehicles_g_corners' 
         
         images = []
         vehicles = []
@@ -151,7 +151,7 @@ class MultiAgentDetDataset(data.Dataset):
         category_idx = []
         trans_mats_list = []
         if num_images == 1:
-            images.append(cv2.imread(os.path.join(self.img_dir, sample[images_key])))
+            images.append(cv2.imread(os.path.join(img_dir, sample[images_key])))
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
             trans_mats_list.append(sample['trans_mat'])
@@ -167,7 +167,7 @@ class MultiAgentDetDataset(data.Dataset):
                 # elif cam.startswith('F'):
                 # elif cam.endswith(str(cam_id)):
                 if cam in cam_list:
-                    images.append(cv2.imread(os.path.join(self.img_dir, info[images_key])))
+                    images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
                     vehicles.append(info[vehicles_key])
                     category_idx.append(info['category_id'])
                     trans_mats_list.append(info['trans_mat'])
@@ -216,7 +216,8 @@ class MultiAgentDetDataset(data.Dataset):
 
             gt_det = []
             num_objs = len(objs)
-            worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
+            # worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
+            worldgrid2worldcoord_mat = np.array([[1/input_w, 0, 0], [0, 1/input_h, 0], [0, 0, 1]])
             for k in range(num_objs):
                 cls_id = int(self.cat_ids[category_ids[k]])
                 if self.opt.coord == 'Global':
@@ -269,7 +270,7 @@ class MultiAgentDetDataset(data.Dataset):
                     ct_int = ct.astype(np.int32)
                 if h > 0 and w > 0:
                     radius = gaussian_radius((math.ceil(h), math.ceil(w)), min_overlap=0.2)
-                    radius = max(0, int(radius))
+                    radius = max(1, int(radius))
                     radius = self.opt.hm_gauss if self.opt.mse_loss else radius
                     # print('h, w: ', h, w)
                     # print('radius: ', radius)
@@ -326,7 +327,8 @@ class MultiAgentDetDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        c, s, aug_imgs, trans_mats, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, num_images=self.num_agents)
+        img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
+        c, s, aug_imgs, trans_mats, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, img_dir, num_images=self.num_agents)
         ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)

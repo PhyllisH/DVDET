@@ -246,6 +246,8 @@ class opts(object):
                                  help='visualize the attention weight mats')
         self.parser.add_argument('--polygon', action='store_true',
                                  help='represent box with polygon')
+        self.parser.add_argument('--uav_height', type=int, default=40,
+                                 help='uav height')
 
     def parse(self, args=''):
         if args == '':
