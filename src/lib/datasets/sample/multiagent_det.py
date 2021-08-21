@@ -158,7 +158,10 @@ class MultiAgentDetDataset(data.Dataset):
             vehicles_i.append(sample['vehicles_i'])
         else:
             # cam_id = np.random.randint(low=0, high=5)
-            cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
+            # cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
+            picked_view = list(np.random.choice(['FRONT', 'BOTTOM', 'LEFT', 'RIGHT', 'BACK'], 5))
+            cam_id = list(range(5))
+            cam_list = ['{}_{}'.format(x, y) for x, y in zip(picked_view, cam_id)]
             # print(cam_list)
             for cam, info in sample.items():
                 if cam.startswith('vehicles'):

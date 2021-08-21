@@ -396,7 +396,10 @@ class IDAUp(nn.Module):
             project = getattr(self, 'proj_' + str(i - startp))
             layers[i] = upsample(project(layers[i]))
             node = getattr(self, 'node_' + str(i - startp))
-            layers[i] = node(layers[i] + layers[i - 1])
+            if layers[i].shape == layers[i - 1].shape:
+                layers[i] = node(layers[i] + layers[i - 1])
+            else:
+                layers[i] = node(layers[i])
 
 
 
@@ -653,7 +656,7 @@ class DLASeg(nn.Module):
             out_channel = channels[self.first_level]
 
         self.ida_up = IDAUp(out_channel, channels[self.first_level:self.last_level], 
-                            [2 ** i for i in range(self.last_level - self.first_level)])
+                            [2 ** (i+2) for i in range(self.last_level - self.first_level)])
         
         self.heads = heads
         for head in self.heads:
@@ -958,6 +961,87 @@ class DLASeg(nn.Module):
         if val_mats is not None:
             z['val_mats'] = val_mats
         return [z]
+    
+    def MEAN_MESSAGE(self, x, trans_layer=[0], with_residual=True):
+        '''
+        Mode: average the message
+        Input: x shape [b, num_agents, c, h, w]
+        '''
+        for c_layer in trans_layer:
+            # 1. Choose the layer
+            feat_map = x[c_layer]
+            # 2. Encode message (in global coord)
+            feat_map_mask = torch.where(feat_map>0, torch.ones_like(feat_map).to(feat_map.device), torch.zeros_like(feat_map).to(feat_map.device))
+            feat_fuse = feat_map.sum(dim=1) / (feat_map_mask.sum(dim=1)+1e-6)
+            if with_residual:
+                feat_fuse = feat_fuse.unsqueeze(1)
+                x[c_layer] = x[c_layer] * 0.5 + feat_fuse * 0.5
+            else:
+                x[c_layer] = feat_fuse
+        return x
+    
+    def MAX_MESSAGE(self, x, trans_layer=[0], with_residual=True):
+        '''
+        Mode: average the message
+        Input: x shape [b, num_agents, c, h, w]
+        '''
+        for c_layer in trans_layer:
+            # 1. Choose the layer
+            feat_map = x[c_layer]
+            # 2. Encode message (in global coord)
+            feat_fuse = feat_map.max(dim=1)[0]
+            if with_residual:
+                feat_fuse = feat_fuse.unsqueeze(1)
+                x[c_layer] = x[c_layer] * 0.5 + feat_fuse * 0.5
+            else:
+                x[c_layer] = feat_fuse
+        return x
+    
+    def WHEN2COM_MESSAGE(self, x, trans_layer=[0], with_residual=True):
+        b, num_agents, c, h, w = x[-1].shape
+        qk_feat = x[-1].view(b*num_agents, c, h, w).contiguous()
+        query_key_maps = self.query_key_net(qk_feat) # (b*num_agents, c, h, w)
+        querys = self.query_net(query_key_maps) # (b*num_agents, query_size)
+        keys = self.key_net(query_key_maps) # (b*num_agents, key_size)
+        query_mat = querys.view(b, num_agents, self.query_size) # (b, num_agents, query_size)
+        key_mat = keys.view(b, num_agents, self.key_size) # (b, num_agents, key_size)
+        for c_layer in trans_layer:
+            val_mat = x[c_layer]
+            feat_fuse, prob_action = self.attention_net(query_mat, key_mat, val_mat)    # (b, num_agents, c, h, w)
+            if with_residual:
+                x[c_layer] = feat_fuse * 0.5 + x[c_layer] * 0.5
+            else:
+                x[c_layer] = feat_fuse
+        # print(prob_action)
+        return x
+    
+    def V2V_MESSAGE(self, x, trans_layer=[0], with_residual=True):
+        for c_layer in trans_layer:
+            b, num_agents, c, h, w = x[c_layer].shape
+            for _ in range(self.gnn_iter_num):
+                mean_feat = x[c_layer].sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1) # (b, num_agents, c, h, w)
+                mean_feat = (mean_feat - x[c_layer])/4.0
+                cat_feat = torch.cat([x[c_layer], mean_feat], dim=2) # (b, num_agents, 2*c, h, w)
+                cat_feat = cat_feat.view(b*num_agents, 1, 2*c, h, w).contiguous()
+                updated_feat, _ = eval('self.convgru'+str(c_layer))(cat_feat, None)
+                updated_feat = updated_feat.view(b, num_agents, c, h, w).contiguous()  # (b, num_agents, c, h, w)
+                x[c_layer] = updated_feat
+        return x
+    
+    def POINTWISE_MESSAGE(self, x, trans_layer=[0], with_residual=True):
+        for c_layer in trans_layer:
+            b, num_agents, c, h, w = x[c_layer].shape
+            val_mat = x[c_layer].unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1).contiguous()
+            query_mat = x[c_layer].unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1)   # (b*num_agents, c, h, w) --> (b, k_agents, q_agents, c, h, w)
+            weight_mat = torch.cat([query_mat, val_mat], dim=3).view(b*num_agents*num_agents, c*2, h, w)
+            weight_mat = eval('self.weight_net'+str(c_layer))(weight_mat)    # (b*k_agents*q_agents, c, h, w)
+            weight_mat = F.relu(weight_mat).view(b, num_agents, num_agents, 1, h, w).softmax(dim=1)
+            feat_fuse = (weight_mat * val_mat).sum(dim=1)    # (b, num_agents, c, h, w)
+            if with_residual:
+                x[c_layer] = feat_fuse * 0.5 + x[c_layer] * 0.5
+            else:
+                x[c_layer] = feat_fuse
+        return x
 
     def GlobalCoord_forward(self, images, trans_mats):
         b, num_agents, img_c, img_h, img_w = images.size()
@@ -977,7 +1061,7 @@ class DLASeg(nn.Module):
         x = self.base(images)
         x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        scale = 4
+        scale = 1
         if warp_image:
             global_x = x
         else:
@@ -997,6 +1081,28 @@ class DLASeg(nn.Module):
                 # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
                 global_x.append(global_feat)
                 trans_mats_list.append(cur_trans_mats)
+        
+        #########################################################################
+        #        Merge the feature of multi-agents (with bandwidth cost)        #
+        #########################################################################
+        if self.trans_layer[-1] == -2:
+            pass
+        else:
+            if self.message_mode == 'Mean':
+                global_x = self.MEAN_MESSAGE(global_x, self.trans_layer)
+            elif self.message_mode == 'Max':
+                global_x = self.MAX_MESSAGE(global_x, self.trans_layer)
+            elif self.message_mode == 'When2com':
+                global_x = self.WHEN2COM_MESSAGE(global_x, self.trans_layer)
+            elif self.message_mode == 'V2V':
+                global_x = self.V2V_MESSAGE(global_x, self.trans_layer)
+            elif self.message_mode == 'Pointwise':
+                global_x = self.POINTWISE_MESSAGE(global_x, self.trans_layer)
+            
+            for c_layer, feat_map in enumerate(global_x):
+                b, num_agents, c, h, w = feat_map.shape
+                feat_map = feat_map.view(b*num_agents, c, h, w)
+                global_x[c_layer] = feat_map
 
         y = []
         for i in range(self.last_level - self.first_level):

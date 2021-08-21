@@ -38,32 +38,38 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
     def __init__(self, opt, split, data_dir=None):
         super(MULTIAGENTAIRSIMCAM, self).__init__()
         # self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
-        # self.data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15'
-        self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
-                        # '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m', \
-                        '/DATA7_DB7/data/shfang/airsim_camera_seg_15'] if data_dir is None else data_dir
+        self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15']
+        # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']
+        # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m']
+        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15', \
+        #               '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
+        #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if data_dir is None else data_dir
         # print('Data dir: {}'.format(self.data_dir))
         # self.img_dir = os.path.join(self.data_dir, 'images')
         self.img_dir = self.data_dir
         if split == 'val':
             # self.annot_path = os.path.join(
             #     self.data_dir, 'multiagent_annotations', 'val_instances_sample.pkl')
-            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height)) for data_dir in self.data_dir]
+            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height)) \
+                                for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height)))]
             if opt.coord == 'Global':
                 # self.annot_path_cocoformat = os.path.join(
                 #     self.data_dir, 'multiagent_annotations', 'val_instances_global.json')
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) for data_dir in self.data_dir]
+                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
             else:
                 self.annot_path_cocoformat = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'val_instances.json')
         else:
             # self.annot_path = os.path.join(
             #     self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
-            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height)) for data_dir in self.data_dir]
+            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height)) \
+                                for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height)))]
             if opt.coord == 'Global':
                 # self.annot_path_cocoformat = os.path.join(
                 #     self.data_dir, 'multiagent_annotations', 'train_instances_global.json')
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)) for data_dir in self.data_dir]
+                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)))]
             else:
                 self.annot_path_cocoformat = os.path.join(
                     self.data_dir, 'multiagent_annotations', 'train_instances.json')
@@ -95,7 +101,7 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         print(self.annot_path_cocoformat)
         if isinstance(self.annot_path, str):
             self.samples = pkl.load(open(self.annot_path, 'rb'))['samples']
-            self.img_dir = self.data_dir[0]
+            self.img_dir = self.data_dir
         else:
             self.samples = []
             self.img_dir = []
