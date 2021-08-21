@@ -27,6 +27,9 @@ import torch.utils.model_zoo as model_zoo
 import kornia
 
 from .DCNv2.dcn_v2 import DCN
+import sys
+sys.path.append('/GPFS/data/yhu/code/CoDet/src/lib/models/networks')
+from .convolutional_rnn import Conv2dGRU
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -546,7 +549,8 @@ class Sparsemax(nn.Module):
 class km_generator(nn.Module):
     def __init__(self, out_size=128, input_feat_h=14, input_feat_w=25):
         super(km_generator, self).__init__()
-        self.n_feat = int(256 * (input_feat_h//4 + 1) * (input_feat_w//4 + 1))
+        # self.n_feat = int(256 * (input_feat_h//4 + 1) * (input_feat_w//4 + 1))
+        self.n_feat = int(256 * (input_feat_h//4) * (input_feat_w//4))
         self.fc = nn.Sequential(
             nn.Linear(self.n_feat, 256), #            
             nn.ReLU(inplace=True),
@@ -562,12 +566,12 @@ class policy_net4(nn.Module):
     def __init__(self, base_name, pretrained, down_ratio, last_level):
         super(policy_net4, self).__init__()
         assert down_ratio in [2, 4, 8, 16]
-        self.first_level = int(np.log2(down_ratio))
-        self.last_level = last_level
-        self.base = globals()[base_name](pretrained=pretrained)
-        channels = self.base.channels
-        scales = [2 ** i for i in range(len(channels[self.first_level:]))]
-        self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
+        # self.first_level = int(np.log2(down_ratio))
+        # self.last_level = last_level
+        # self.base = globals()[base_name](pretrained=pretrained)
+        # channels = self.base.channels
+        # scales = [2 ** i for i in range(len(channels[self.first_level:]))]
+        # self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
 
         # Encoder
         # down 1 
@@ -579,13 +583,8 @@ class policy_net4(nn.Module):
         self.conv4 = conv2DBatchNormRelu(256, 256, k_size=3, stride=1, padding=1)
         self.conv5 = conv2DBatchNormRelu(256, 256, k_size=3, stride=2, padding=1)
 
-    def forward(self, images, trans_mats):
-        worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/50, 0, -200], [0, 500/28, -250], [0, 0, 1]])).to(trans_mats.device)
-        trans_mats_q = torch.inverse(trans_mats @ worldgrid2worldcoord_mat) @ torch.Tensor(np.diag([1/32, 1/32, 1])).to(trans_mats.device)
-        images = kornia.warp_perspective(images, trans_mats_q, dsize=(images.shape[-2], images.shape[-1]))
-        x = self.base(images)
-        _, _, _, outputs1 = self.dla_up(x)
-        outputs = self.conv1(outputs1)
+    def forward(self, x):
+        outputs = self.conv1(x)
         outputs = self.conv2(outputs)
         outputs = self.conv3(outputs)
         outputs = self.conv4(outputs)
@@ -595,7 +594,7 @@ class policy_net4(nn.Module):
 class MIMOGeneralDotProductAttention(nn.Module):
     ''' Scaled Dot-Product Attention '''
 
-    def __init__(self, query_size, key_size, warp_flag, attn_dropout=0.1):
+    def __init__(self, query_size, key_size, warp_flag=False, attn_dropout=0.1):
         super().__init__()
         self.sparsemax = Sparsemax(dim=1)
         self.softmax = nn.Softmax(dim=1)
@@ -656,7 +655,7 @@ class DLASeg(nn.Module):
             out_channel = channels[self.first_level]
 
         self.ida_up = IDAUp(out_channel, channels[self.first_level:self.last_level], 
-                            [2 ** (i+2) for i in range(self.last_level - self.first_level)])
+                            [2 ** i for i in range(self.last_level - self.first_level)])
         
         self.heads = heads
         for head in self.heads:
@@ -689,11 +688,29 @@ class DLASeg(nn.Module):
         self.message_mode = message_mode
         self.coord = coord
         self.trans_layer = trans_layer
-        if self.message_mode in ['LOCAL_MESSAGE_NOWARP', 'GLOBAL_MESSAGE', 'LOCAL_MESSAGE']:
+        if self.message_mode in ['When2com']:
+            self.query_key_net = policy_net4(base_name, pretrained, down_ratio, last_level)
+            self.key_net = km_generator(out_size=self.key_size, input_feat_h=448//32*4, input_feat_w=800//32*4)
+            self.query_net = km_generator(out_size=self.query_size, input_feat_h=448//32*4, input_feat_w=800//32*4)
+            self.attention_net = MIMOGeneralDotProductAttention(self.query_size, self.key_size)
+        elif self.message_mode in ['V2V']:
+            self.gnn_iter_num = 3
+            for c_layer in self.trans_layer:
+                if c_layer >= 0:
+                    convgru = Conv2dGRU(in_channels=128*2**c_layer,
+                                            out_channels=64*2**c_layer,
+                                            kernel_size=3,
+                                            num_layers=1,
+                                            bidirectional=False,
+                                            dilation=1,
+                                            stride=1)
+                    self.__setattr__('convgru'+str(c_layer), convgru)
+        elif self.message_mode in ['Pointwise']:
             for c_layer in self.trans_layer:
                 if c_layer >= 0:
                     weight_net = nn.Conv2d(128*2**c_layer, 1, kernel_size=1, stride=1, padding=0)
                     self.__setattr__('weight_net'+str(c_layer), weight_net)
+
         if self.trans_layer[0] == -1:
             self.conv0 = nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1)
             self.conv1 = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
@@ -1061,7 +1078,7 @@ class DLASeg(nn.Module):
         x = self.base(images)
         x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        scale = 1
+        scale = 4
         if warp_image:
             global_x = x
         else:
@@ -1088,6 +1105,10 @@ class DLASeg(nn.Module):
         if self.trans_layer[-1] == -2:
             pass
         else:
+            for c_layer, feat_map in enumerate(global_x):
+                _, c, h, w = feat_map.shape
+                feat_map = feat_map.view(b, num_agents, c, h, w)
+                global_x[c_layer] = feat_map
             if self.message_mode == 'Mean':
                 global_x = self.MEAN_MESSAGE(global_x, self.trans_layer)
             elif self.message_mode == 'Max':

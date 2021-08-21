@@ -38,12 +38,12 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
     def __init__(self, opt, split, data_dir=None):
         super(MULTIAGENTAIRSIMCAM, self).__init__()
         # self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
-        self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15']
+        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15']
         # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']
         # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m']
-        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15', \
-        #               '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
-        #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if data_dir is None else data_dir
+        self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15', \
+                      '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
+                        '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if data_dir is None else data_dir
         # print('Data dir: {}'.format(self.data_dir))
         # self.img_dir = os.path.join(self.data_dir, 'images')
         self.img_dir = self.data_dir
