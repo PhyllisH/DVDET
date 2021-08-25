@@ -41,16 +41,18 @@
 #     --message_mode=V2V --uav_height=40 --down_ratio=1
 
 # CUDA_VISIBLE_DEVICES=1,2,3,4 python main.py multiagent_det \
+#     --exp_id dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Max_Featmap4_RandomPickView_Updated  \
+#     --batch_size=4 --master_batch=1 --num_agents=5 --lr=5e-4 \
+#     --gpus 1,2,3,4 --trans_layer 0 --num_epochs 50 --coord=Global \
+#     --message_mode=Max --uav_height=40 --down_ratio=1
+
+# CUDA_VISIBLE_DEVICES=1,2,3,4 python main.py multiagent_det \
 #     --exp_id dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Mean_Featmap4_RandomPickView_Updated  \
 #     --batch_size=4 --master_batch=1 --num_agents=5 --lr=5e-4 \
 #     --gpus 1,2,3,4 --trans_layer 0 --num_epochs 50 --coord=Global \
 #     --message_mode=Mean --uav_height=40 --down_ratio=1 
 
-# CUDA_VISIBLE_DEVICES=1,2,3,4 python main.py multiagent_det \
-#     --exp_id dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Max_Featmap4_RandomPickView_Updated  \
-#     --batch_size=4 --master_batch=1 --num_agents=5 --lr=5e-4 \
-#     --gpus 1,2,3,4 --trans_layer 0 --num_epochs 50 --coord=Global \
-#     --message_mode=Max --uav_height=40 --down_ratio=1
+
 
 CUDA_VISIBLE_DEVICES=1,2,3,4 python main.py multiagent_det \
     --exp_id dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Max_Featmap4_RandomPickView_Town5  \
