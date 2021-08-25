@@ -203,7 +203,8 @@ def convert_multiview_coco(town_id=1, height=40):
     # data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
     # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2/'
     # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_60m/'
-    data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m/'
+    # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m/'
+    data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
     nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
     # data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
     # nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)

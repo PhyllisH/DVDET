@@ -248,6 +248,8 @@ class opts(object):
                                  help='represent box with polygon')
         self.parser.add_argument('--uav_height', type=int, default=40,
                                  help='uav height')
+        self.parser.add_argument('--input_dir', default='',
+                                 help='Local or Global')
 
     def parse(self, args=''):
         if args == '':

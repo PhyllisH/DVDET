@@ -1,3 +1,4 @@
+*.txt
 *.png
 legacy/*
 .DS_Store

@@ -694,7 +694,7 @@ class DLASeg(nn.Module):
             self.query_net = km_generator(out_size=self.query_size, input_feat_h=448//32*4, input_feat_w=800//32*4)
             self.attention_net = MIMOGeneralDotProductAttention(self.query_size, self.key_size)
         elif self.message_mode in ['V2V']:
-            self.gnn_iter_num = 3
+            self.gnn_iter_num = 1
             for c_layer in self.trans_layer:
                 if c_layer >= 0:
                     convgru = Conv2dGRU(in_channels=128*2**c_layer,

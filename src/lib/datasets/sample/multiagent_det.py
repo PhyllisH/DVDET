@@ -271,6 +271,7 @@ class MultiAgentDetDataset(data.Dataset):
                     ct = np.array(
                         [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
                     ct_int = ct.astype(np.int32)
+                    # print(ct_int, h, w)
                 if h > 0 and w > 0:
                     radius = gaussian_radius((math.ceil(h), math.ceil(w)), min_overlap=0.2)
                     radius = max(1, int(radius))
