@@ -4,12 +4,13 @@ Contact: phyllis1sjtu@outlook.com
 LastEditTime: 2021-07-26 20:03:16
 Description: 
 '''
-from __future__ import absolute_import
+from __future__ import absolute_import, with_statement
 from __future__ import division
 from __future__ import print_function
 
 import pickle as pkl
 import json
+from kornia.utils import image
 import numpy as np
 import math
 import cv2
@@ -25,7 +26,7 @@ from nuscenes.utils.geometry_utils import view_points, transform_matrix
 
 import sys
 sys.path.append('./')
-from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord, get_2d_polygon
+from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord, get_2d_polygon, get_crop_shift_mat
 import kornia
 import torch
 
@@ -43,20 +44,30 @@ camera_intrinsic = np.array(camera_intrinsic)
 # scale_w = 800/500 * 4
 scale_h = 500/500 * 4
 scale_w = 500/500 * 4
-worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -200], [0, 1/scale_h, -250], [0, 0, 1]])
+map_scale_h = 1 / scale_h
+map_scale_w = 1 / scale_w
+world_X_left = 200
+world_Y_left = 250
+with_rotat = True
+worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -world_X_left], [0, 1/scale_h, -world_Y_left], [0, 0, 1]])
 # default_worldgrid2worldcoord_mat = np.array([[500/800, 0, -200], [0, 500/450, -250], [0, 0, 1]])
-default_worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -250], [0, 0, 1]])
-image_size = (int(500*scale_h), int(500*scale_w))
+default_worldgrid2worldcoord_mat = np.array([[1, 0, -world_X_left], [0, 1, -world_Y_left], [0, 0, 1]])
+# image_size = (int(500*scale_h), int(500*scale_w))
+image_size = (int(192/map_scale_h), int(352/map_scale_w))
 # image_size = (int(500*scale_h), int(300*scale_w))
 # image_size = (225, 400)
 ##################################################################
-
-def BoxCoordTrans(coord, tranlation, rotation, mode='L2G'):
-    project_mat = get_imgcoord_matrices(tranlation.copy(), rotation.copy(), camera_intrinsic)
-    # project_mat = project_mat @ default_worldgrid2worldcoord_mat
-    project_mat = project_mat @ worldgrid2worldcoord_mat
+def BoxCoordTrans(coord, translation, rotation, mode='L2G', with_rotat=False, sensor_type="BOTTOM"):
+    project_mat = get_imgcoord_matrices(translation.copy(), rotation.copy(), camera_intrinsic)
+    project_mat = project_mat @ default_worldgrid2worldcoord_mat
+    # project_mat = project_mat @ worldgrid2worldcoord_mat
     if mode == 'L2G':
         project_mat = np.linalg.inv(project_mat)
+    else:
+        if with_rotat:
+            rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, map_scale_w, map_scale_h, world_X_left, world_Y_left)
+            project_mat = project_mat @ np.linalg.inv(rotat_mat)
+
     coord = np.concatenate([coord[:2], np.ones([1, coord.shape[1]])], axis=0)
     coord_warp = project_mat @ coord
     coord_warp = coord_warp / coord_warp[2, :]
@@ -97,15 +108,16 @@ def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
     else:
         # import ipdb; ipdb.set_trace()
         image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
-        image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
-        image_up = vis_cam_g(image_u, annos, sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L')
-        image_up = vis_cam_g(image_up, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre, mode='G2L')
+        sensor_type = sensor['image'].split('/')[1].split('_')[1]
+        image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=with_rotat, sensor_type=sensor_type)
+        image_up = vis_cam_g(image_u, annos, sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L', with_rotat=with_rotat, sensor_type=sensor_type)
+        image_up = vis_cam_g(image_up, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre, mode='G2L',  with_rotat=with_rotat, sensor_type=sensor_type)
         image_gp = vis_cam(image_g.copy(), annos)
         image_gp = vis_cam(image_gp, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
 
     return image_up, image_gp
 
-def CoordTrans(image, translation, rotation, mode='L2G'):
+def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, sensor_type='BOTTOM'):
     """
     Coordnate transform:
         mode: 'L2G' from local (uav) to global
@@ -129,7 +141,10 @@ def CoordTrans(image, translation, rotation, mode='L2G'):
         trans_mat = project_mat
     else:
         trans_mat = np.linalg.inv(project_mat)
-        
+    
+    if with_rotat:
+        rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, map_scale_w, map_scale_h, world_X_left, world_Y_left)
+        trans_mat = rotat_mat@trans_mat
     data = kornia.image_to_tensor(image, keepdim=False)
     data_warp = kornia.warp_perspective(data.float(),
                                         torch.tensor(trans_mat).repeat([1, 1, 1]).float(),
@@ -166,7 +181,7 @@ def xywh2polygon(bbox):
     right_bottom = [x+w, y+h]
     return np.array([left_up, left_bottom, right_bottom, right_up]).reshape([4,2]).T
 
-def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=-1, mode='L2G'):
+def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=-1, mode='L2G', with_rotat=with_rotat, sensor_type='BOTTOM'):
     # ori_image = image.copy().mean(axis=-1)
     for anno in annos:
         if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
@@ -178,7 +193,7 @@ def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=
                     polygon = np.array(bbox[:8]).reshape([4,2]).T
             else:
                 polygon = np.array(anno['corners'][:8]).reshape([4,2]).T
-            bbox_g = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode)
+            bbox_g = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode, with_rotat, sensor_type)
             bbox_g = np.array(get_2d_polygon(bbox_g[:2])).reshape([4,2])
             # bbox_g_back = BoxCoordTrans(bbox_g.copy(), tranlation, rotation, mode='G2L')
             # print('Diff: ', np.abs(bbox_g_back[:2]-polygon).sum())
@@ -236,7 +251,8 @@ def visualize_result():
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
     if coord_mode == 'Global':
-        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global.json'.format(40)))
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global_crop.json'.format(40)))
+        # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances_global.json'))
         # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/train_instances_global.json'))
     else:    

@@ -10,13 +10,14 @@ from utils.utils import AverageMeter
 
 
 class ModelWithLoss(torch.nn.Module):
-    def __init__(self, model, loss):
+    def __init__(self, model, loss, map_scale):
         super(ModelWithLoss, self).__init__()
         self.model = model
         self.loss = loss
+        self.map_scale = map_scale
 
     def forward(self, batch):
-        outputs = self.model(batch['input'], batch['trans_mats'])
+        outputs = self.model(batch['input'], batch['trans_mats'], [batch['shift_mats_1'], batch['shift_mats_2'], batch['shift_mats_4'], batch['shift_mats_8']], self.map_scale)
         loss, loss_stats = self.loss(outputs, batch)
         return outputs[-1], loss, loss_stats
 
@@ -27,7 +28,7 @@ class BaseTrainer(object):
         self.opt = opt
         self.optimizer = optimizer
         self.loss_stats, self.loss = self._get_losses(opt)
-        self.model_with_loss = ModelWithLoss(model, self.loss)
+        self.model_with_loss = ModelWithLoss(model, self.loss, self.opt.map_scale)
 
     def set_device(self, gpus, chunk_sizes, device):
         if len(gpus) > 1:

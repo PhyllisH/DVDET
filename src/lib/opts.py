@@ -250,6 +250,9 @@ class opts(object):
                                  help='uav height')
         self.parser.add_argument('--input_dir', default='',
                                  help='Local or Global')
+        
+        self.parser.add_argument('--map_scale', type=float, default=1.0,
+                                 help='map scale')
 
     def parse(self, args=''):
         if args == '':

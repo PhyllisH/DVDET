@@ -65,6 +65,10 @@ class PrefetchDataset(torch.utils.data.Dataset):
         images_key = 'image' if self.opt.coord_mode == 'local' else 'image_g'
         images = []
         trans_mat_list = []
+        shift_mats_1_list = []
+        shift_mats_2_list = []
+        shift_mats_4_list = []
+        shift_mats_8_list = []
         image_idx = []
         cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
         # cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
@@ -83,8 +87,16 @@ class PrefetchDataset(torch.utils.data.Dataset):
                 images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
                 image_idx.append(info['image_id'])
                 trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32))
+                shift_mats_1_list.append(np.array(info['shift_mats'][1*self.opt.map_scale], dtype=np.float32))
+                shift_mats_2_list.append(np.array(info['shift_mats'][2*self.opt.map_scale], dtype=np.float32))
+                shift_mats_4_list.append(np.array(info['shift_mats'][4*self.opt.map_scale], dtype=np.float32))
+                shift_mats_8_list.append(np.array(info['shift_mats'][8*self.opt.map_scale], dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
-        return images, image_idx, trans_mats
+        shift_mats_1 = np.concatenate([x[None,:,:] for x in shift_mats_1_list], axis=0)
+        shift_mats_2 = np.concatenate([x[None,:,:] for x in shift_mats_2_list], axis=0)
+        shift_mats_4 = np.concatenate([x[None,:,:] for x in shift_mats_4_list], axis=0)
+        shift_mats_8 = np.concatenate([x[None,:,:] for x in shift_mats_8_list], axis=0)
+        return images, image_idx, trans_mats, [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
     
     def load_sample_func(self, index):
         info = self.samples[index]
@@ -95,13 +107,17 @@ class PrefetchDataset(torch.utils.data.Dataset):
         images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
         image_idx.append(info['image_id'])
         trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]
-        return images, image_idx, trans_mats
+        shift_mats_1 = np.array(info['shift_mats'][1*self.opt.map_scale], dtype=np.float32)[None,:,:]
+        shift_mats_2 = np.array(info['shift_mats'][2*self.opt.map_scale], dtype=np.float32)[None,:,:]
+        shift_mats_4 = np.array(info['shift_mats'][4*self.opt.map_scale], dtype=np.float32)[None,:,:]
+        shift_mats_8 = np.array(info['shift_mats'][8*self.opt.map_scale], dtype=np.float32)[None,:,:]
+        return images, image_idx, trans_mats, [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
 
     def __getitem__(self, index):
         if 'NO_MESSAGE' in self.opt.message_mode:
-            images, image_idx, trans_mats = self.load_sample_func(index)
+            images, image_idx, trans_mats, shift_mats = self.load_sample_func(index)
         else:
-            images, image_idx, trans_mats = self.load_image_func(index)
+            images, image_idx, trans_mats, shift_mats = self.load_image_func(index)
         
         scaled_images, meta = {}, {}
         for scale in opt.test_scales:
@@ -111,7 +127,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
                 cur_images.append(cur_image)
             scaled_images[scale] = np.concatenate(cur_images, axis=0)
             meta[scale] = cur_meta
-        return image_idx, {'images': scaled_images, 'image': images, 'meta': meta, 'trans_mats': trans_mats}
+        return image_idx, {'images': scaled_images, 'image': images, 'meta': meta, 'trans_mats': trans_mats, \
+                            'shift_mats_1': shift_mats[0], 'shift_mats_2': shift_mats[1], 'shift_mats_4': shift_mats[2], 'shift_mats_8': shift_mats[3]}
 
     def __len__(self):
         if 'NO_MESSAGE' in self.opt.message_mode:

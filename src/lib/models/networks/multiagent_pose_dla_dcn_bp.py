@@ -25,7 +25,6 @@ from torch._C import device
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import kornia
-import matplotlib.pyplot as plt
 
 from .DCNv2.dcn_v2 import DCN
 import sys
@@ -1061,7 +1060,7 @@ class DLASeg(nn.Module):
                 x[c_layer] = feat_fuse
         return x
 
-    def GlobalCoord_forward(self, images, trans_mats, shift_mats, map_scale):
+    def GlobalCoord_forward(self, images, trans_mats):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
 
@@ -1079,41 +1078,26 @@ class DLASeg(nn.Module):
         x = self.base(images)
         x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        scale = 1/map_scale
+        scale = 4
         if warp_image:
             global_x = x
         else:
             global_x = []
             trans_mats_list = []
             trans_mats = trans_mats.view(b*num_agents, 3, 3)
-            fig, axes = plt.subplots(5, 4)
             for c_layer, feat_map in enumerate(x):
                 _, c, h, w = feat_map.size()
-                shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
 
                 # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
                 # uav_i --> global coord
                 # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(trans_mats.device)
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(trans_mats.device)
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(2**(c_layer+4)*scale), 0, 0], [0, 1/(2**(c_layer+4)*scale), 0], [0, 0, 1]])).to(trans_mats.device)
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(500/2**c_layer*scale), 0, 0], [0, 1/(500/2**c_layer*scale), 0], [0, 0, 1]])).to(trans_mats.device)
+                worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(trans_mats.device)
                 feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(trans_mats.device)
-                cur_trans_mats = shift_mats[c_layer] @ torch.inverse(trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
-                # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
+                cur_trans_mats = torch.inverse(trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
                 # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
                 global_x.append(global_feat)
                 trans_mats_list.append(cur_trans_mats)
-                
-                val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
-                for j in range(5):
-                    axes[j, c_layer].imshow((val_mats[j]*255.).astype('uint8'))
-                    axes[j, c_layer].set_xticks([])
-                    axes[j, c_layer].set_yticks([])
-
-            plt.savefig('featmap.png')
-            plt.close()
         
         #########################################################################
         #        Merge the feature of multi-agents (with bandwidth cost)        #
@@ -1156,9 +1140,9 @@ class DLASeg(nn.Module):
         # return [z]
         return [global_z]
     
-    def forward(self, images, trans_mats, shift_mats, map_scale=1.0):
+    def forward(self, images, trans_mats):
         if self.coord == 'Global':
-            return self.GlobalCoord_forward(images, trans_mats, shift_mats, map_scale)
+            return self.GlobalCoord_forward(images, trans_mats)
         else:
             return self.LocalCoord_forward(images, trans_mats)
         

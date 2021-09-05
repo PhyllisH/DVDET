@@ -18,7 +18,6 @@ import torch
 import json
 import cv2
 import os
-from tools.transformation import get_crop_shift_mat, get_shift_coord
 from utils.image import flip, color_aug
 from utils.image import get_affine_transform, affine_transform
 from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian, draw_polygon_gaussian
@@ -151,21 +150,12 @@ class MultiAgentDetDataset(data.Dataset):
         vehicles_i = []
         category_idx = []
         trans_mats_list = []
-        shift_mats_list_1 = []
-        shift_mats_list_2 = []
-        shift_mats_list_4 = []
-        shift_mats_list_8 = []
-        scale = self.opt.map_scale
         if num_images == 1:
             images.append(cv2.imread(os.path.join(img_dir, sample[images_key])))
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
             trans_mats_list.append(sample['trans_mat'])
             vehicles_i.append(sample['vehicles_i'])
-            shift_mats_list_1.append(sample['shift_mats'][1*scale])
-            shift_mats_list_2.append(sample['shift_mats'][2*scale])
-            shift_mats_list_4.append(sample['shift_mats'][4*scale])
-            shift_mats_list_8.append(sample['shift_mats'][8*scale])
         else:
             # cam_id = np.random.randint(low=0, high=5)
             # cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
@@ -185,21 +175,10 @@ class MultiAgentDetDataset(data.Dataset):
                     category_idx.append(info['category_id'])
                     trans_mats_list.append(info['trans_mat'])
                     vehicles_i.append(info['vehicles_i'])
-                    shift_mats_list_1.append(info['shift_mats'][1*scale])
-                    shift_mats_list_2.append(info['shift_mats'][2*scale])
-                    shift_mats_list_4.append(info['shift_mats'][4*scale])
-                    shift_mats_list_8.append(info['shift_mats'][8*scale])
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
-        shift_mats_list_1 = np.concatenate([x[None,:,:] for x in shift_mats_list_1], axis=0)
-        shift_mats_list_2 = np.concatenate([x[None,:,:] for x in shift_mats_list_2], axis=0)
-        shift_mats_list_4 = np.concatenate([x[None,:,:] for x in shift_mats_list_4], axis=0)
-        shift_mats_list_8 = np.concatenate([x[None,:,:] for x in shift_mats_list_8], axis=0)
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample
         c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w = self.get_aug(height, width)
-
-        # output_h, output_w = 512, 512
-        output_h, output_w = int(192/scale), int(352/scale)
 
         num_classes = self.num_classes
         hm = np.zeros((num_images, num_classes, output_h, output_w), dtype=np.float32)
@@ -216,16 +195,7 @@ class MultiAgentDetDataset(data.Dataset):
         
         # ----------- TransMat ------------- #
         trans_mats = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        shift_mats_1 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        shift_mats_2 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        shift_mats_4 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        shift_mats_8 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        
         trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
-        shift_mats_1[:min(num_images, len(trans_mats_list))] = shift_mats_list_1[:min(num_images, len(shift_mats_1))]
-        shift_mats_2[:min(num_images, len(trans_mats_list))] = shift_mats_list_2[:min(num_images, len(shift_mats_2))]
-        shift_mats_4[:min(num_images, len(trans_mats_list))] = shift_mats_list_4[:min(num_images, len(shift_mats_4))]
-        shift_mats_8[:min(num_images, len(trans_mats_list))] = shift_mats_list_8[:min(num_images, len(shift_mats_8))]
 
         # draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else \
         #     draw_umich_gaussian
@@ -250,10 +220,7 @@ class MultiAgentDetDataset(data.Dataset):
             gt_det = []
             num_objs = len(objs)
             # worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
-            # worldgrid2worldcoord_mat = np.array([[1/input_w, 0, 0], [0, 1/input_h, 0], [0, 0, 1]])
-            # worldgrid2worldcoord_mat = np.array([[1/(output_w), 0, 0], [0, 1/(output_h), 0], [0, 0, 1]])
-            worldgrid2worldcoord_mat = np.array([[scale/(500), 0, 0], [0, scale/(500), 0], [0, 0, 1]])
-            map_mat = np.array([[1/scale, 0, 0], [0, 1/scale, 0], [0, 0, 1]])
+            worldgrid2worldcoord_mat = np.array([[1/input_w, 0, 0], [0, 1/input_h, 0], [0, 0, 1]])
             for k in range(num_objs):
                 cls_id = int(self.cat_ids[category_ids[k]])
                 if self.opt.coord == 'Global':
@@ -276,8 +243,7 @@ class MultiAgentDetDataset(data.Dataset):
                     coord = np.array(objs[k]).reshape([4,2])
                     # print('BEV: ', coord)
                     coord = np.concatenate([coord.T, np.ones([1, coord.shape[0]])], axis=0)
-                    coord_warp = get_shift_coord(coord, shift_mats_1[index]@map_mat)
-                    # coord_warp = trans_output @ coord
+                    coord_warp = trans_output @ coord
                     # print('BEV image: ', coord_warp)
                     if self.opt.polygon:
                         bbox = self._get_polygon_gt(coord_warp[:2]) # (x,y,w,h,sin,cos)
@@ -349,12 +315,11 @@ class MultiAgentDetDataset(data.Dataset):
                 save_img = (aug_imgs[index]*255).astype('uint8').transpose(1,2,0)
                 cv2.imwrite('ori.png', save_img)
                 # cur_trans_mats = np.linalg.inv(trans_mats[0] @ worldgrid2worldcoord_mat @ np.linalg.inv(np.concatenate([trans_output, np.array([0, 0, 1]).reshape([1,3])], axis=0)))
-                # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
-                cur_trans_mats = shift_mats_1[index] @ np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+                cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
                 data = kornia.image_to_tensor(save_img, keepdim=False)
                 data_warp = kornia.warp_perspective(data.float(),
                                                     torch.tensor(cur_trans_mats).repeat([1, 1, 1]).float(),
-                                                    dsize=(output_h, output_w))
+                                                    dsize=(input_h, input_w))
                 # convert back to numpy
                 img_warp = kornia.tensor_to_image(data_warp.byte())
                 img_warp = cv2.resize(img_warp, dsize=(output_w, output_h))
@@ -362,14 +327,13 @@ class MultiAgentDetDataset(data.Dataset):
                 img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
                 cv2.imwrite('ori_warp.png', img_warp)
 
-        return c, s, aug_imgs, trans_mats, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets
+        return c, s, aug_imgs, trans_mats, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets
 
     def __getitem__(self, index):
         sample = self.samples[index]
         img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
-        c, s, aug_imgs, trans_mats, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, img_dir, num_images=self.num_agents)
-        ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, \
-                'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
+        c, s, aug_imgs, trans_mats, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, img_dir, num_images=self.num_agents)
+        ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)
             dense_wh_mask = np.concatenate([hm_a, hm_a], axis=1)

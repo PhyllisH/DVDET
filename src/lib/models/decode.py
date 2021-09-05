@@ -472,8 +472,10 @@ def ddd_decode(heat, rot, depth, dim, wh=None, reg=None, K=40):
     return detections
 
 
-def ctdet_decode(heat, wh, reg=None, angle=None, cat_spec_wh=False, K=100):
+def ctdet_decode(heat, wh, map_scale=1.0, shift_mats=None, reg=None, angle=None, cat_spec_wh=False, K=100):
     batch, cat, height, width = heat.size()
+    if shift_mats is not None:
+        shift_mats = shift_mats.view(batch, 3, 3)
 
     # heat = torch.sigmoid(heat)
     # perform nms on heatmaps
@@ -502,6 +504,18 @@ def ctdet_decode(heat, wh, reg=None, angle=None, cat_spec_wh=False, K=100):
                             ys - wh[..., 1:2] / 2,
                             xs + wh[..., 0:1] / 2,
                             ys + wh[..., 1:2] / 2], dim=2)
+        if shift_mats is not None:
+            # bboxes = bboxes.view(batch, K, 2, 2).view(batch, K*2, 2).transpose(2, 1)
+            # shift_mats_inverse = torch.inverse(shift_mats)
+            # bboxes = shift_mats_inverse @ torch.cat([bboxes, torch.ones([batch, 1, bboxes.shape[-1]]).to(bboxes.device)], axis=-2)
+            # bboxes = bboxes[:, :2, :] / bboxes[:, 2:3, :]
+            # bboxes = bboxes.transpose(2, 1).contiguous().view(batch, K, 2, 2).contiguous().view(batch, K, 4).contiguous()
+            # x_min = bboxes[:,:,::2].min(dim=-1)[0].unsqueeze(-1)
+            # x_max = bboxes[:,:,::2].max(dim=-1)[0].unsqueeze(-1)
+            # y_min = bboxes[:,:,1::2].min(dim=-1)[0].unsqueeze(-1)
+            # y_max = bboxes[:,:,1::2].max(dim=-1)[0].unsqueeze(-1)
+            # bboxes = torch.cat([x_min, y_min, x_max, y_max], dim=2)
+            bboxes = bboxes * map_scale # (batch, 3, K*2)
         detections = torch.cat([bboxes, scores, clses], dim=2)
     else:
         bboxes = torch.cat([xs - wh[..., 0:1] / 2,

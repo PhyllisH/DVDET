@@ -301,6 +301,35 @@ def WorldCoord2WorldGrid(coord, scale_w=1, scale_h=1, world_X_left=200, world_Y_
     y = (coord[1:2] + world_Y_left) * scale_h
     return np.concatenate([x, y], axis=0)
 
+def get_crop_shift_mat(tranlation, rotation, sensor_type, map_scale_w=1, map_scale_h=1, world_X_left=200, world_Y_left=250):
+    im_position = tranlation.copy()
+    im_position[-1] = 1
+    world_mat = np.array([[1/map_scale_w, 0, 0], [0, 1/map_scale_h, 0], [0, 0, 1]]) @ \
+                    np.array([[1, 0, world_X_left], [0, 1, world_Y_left], [0, 0, 1]])
+    grid_center = world_mat @ im_position # [x, y, 1]
+
+    yaw, _, _ = Quaternion(rotation).yaw_pitch_roll
+    yaw += math.pi/2.0
+
+    if sensor_type == 'BOTTOM':
+        x_shift = 176/map_scale_w # 250/map_scale_w
+        y_shift = 96/map_scale_h # 250/map_scale_h
+    else:
+        x_shift = 176/map_scale_w # 250/map_scale_w
+        y_shift = 196/map_scale_h # 350/map_scale_h
+
+    shift_mat = np.array([[1, 0, -x_shift], [0, 1, -y_shift], [0, 0, 1]])
+    rotat_mat = np.array([[math.cos(yaw), -math.sin(yaw), 0], [math.sin(yaw), math.cos(yaw), 0], [0, 0, 1]]) + \
+                    np.array([[0, 0, grid_center[0]], [0, 0, grid_center[1]], [0, 0, 0]])
+    trans_mat = np.linalg.inv(rotat_mat @ shift_mat)
+    return trans_mat
+
+def get_shift_coord(coord, project_mat):
+    image_coord = project_mat @ np.concatenate([coord[:2], np.ones([1, coord.shape[-1]])], axis=0)
+    image_coord = image_coord[:3] / image_coord[2, :]
+    return image_coord[:2]
+
+
 def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worldgrid2worldcoord_mat):
     im_position = tranlation.copy()
     im_position[2] = - im_position[2]

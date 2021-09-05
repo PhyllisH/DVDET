@@ -35,10 +35,47 @@ from .base_detector import BaseDetector
 class MultiAgentDetector(BaseDetector):
     def __init__(self, opt):
         super(MultiAgentDetector, self).__init__(opt)
+    
+    def pre_process(self, image, scale, meta=None):
+        height, width = image.shape[0:2]
+        new_height = int(height * scale)
+        new_width = int(width * scale)
+        if self.opt.fix_res:
+            inp_height, inp_width = self.opt.input_h, self.opt.input_w
+            c = np.array([new_width / 2., new_height / 2.], dtype=np.float32)
+            s = max(height, width) * 1.0
+        else:
+            inp_height = (new_height | self.opt.pad) + 1
+            inp_width = (new_width | self.opt.pad) + 1
+            c = np.array([new_width // 2, new_height // 2], dtype=np.float32)
+            s = np.array([inp_width, inp_height], dtype=np.float32)
+        # print('ori: ', width, height)
+        # print('new: ', new_width, new_height)
+        # print('inp: ', inp_width, inp_height)
+        # print('input: ', self.opt.input_h, self.opt.input_w)
+        trans_input = get_affine_transform(c, s, 0, [inp_width, inp_height])
+        resized_image = cv2.resize(image, (new_width, new_height))
+        inp_image = cv2.warpAffine(
+            resized_image, trans_input, (inp_width, inp_height),
+            flags=cv2.INTER_LINEAR)
+        # inp_image = ((inp_image / 255. - self.mean) / self.std).astype(np.float32)
+        inp_image = (inp_image / 255.).astype(np.float32)
 
-    def process(self, images, trans_mats, return_time=False):
+        images = inp_image.transpose(2, 0, 1).reshape(1, 3, inp_height, inp_width)
+        if self.opt.flip_test:
+            images = np.concatenate((images, images[:, :, :, ::-1]), axis=0)
+        images = torch.from_numpy(images)
+
+        c = np.array([352/(2*self.opt.map_scale), 192/(2*self.opt.map_scale)])
+        s = np.array([352/(self.opt.map_scale), 192/(self.opt.map_scale)])
+        meta = {'c': c, 's': s,
+                'out_height': 192/(self.opt.map_scale),
+                'out_width': 352/(self.opt.map_scale)}
+        return images, meta
+
+    def process(self, images, trans_mats, shift_mats, return_time=False):
         with torch.no_grad():
-            output = self.model(images, trans_mats)[-1]
+            output = self.model(images, trans_mats, shift_mats, self.opt.map_scale)[-1]
             hm = output['hm'].sigmoid_()
             wh = output['wh']
             reg = output['reg'] if self.opt.reg_offset else None
@@ -49,7 +86,7 @@ class MultiAgentDetector(BaseDetector):
                 reg = reg[0:1] if reg is not None else None
             torch.cuda.synchronize()
             forward_time = time.time()
-            dets = ctdet_decode(hm, wh, reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+            dets = ctdet_decode(hm, wh, map_scale=self.opt.map_scale, shift_mats=shift_mats[0], reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
 
         if return_time:
             return output, dets, forward_time
@@ -174,12 +211,15 @@ class MultiAgentDetector(BaseDetector):
                 meta = pre_processed_images['meta'][scale]
                 meta = {k: v.numpy()[0] for k, v in meta.items()}
                 trans_mats = pre_processed_images['trans_mats']
+                shift_mats = [pre_processed_images['shift_mats_1'], pre_processed_images['shift_mats_2'], \
+                                pre_processed_images['shift_mats_4'], pre_processed_images['shift_mats_8']]
             images = images.to(self.opt.device)
             trans_mats = trans_mats.to(self.opt.device)
+            shift_mats = [x.to(self.opt.device) for x in shift_mats]
             torch.cuda.synchronize()
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
-            output, dets, forward_time = self.process(images, trans_mats, return_time=True)
+            output, dets, forward_time = self.process(images, trans_mats, shift_mats, return_time=True)
 
             torch.cuda.synchronize()
             net_time += forward_time - pre_process_time
