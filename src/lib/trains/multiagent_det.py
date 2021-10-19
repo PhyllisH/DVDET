@@ -24,7 +24,6 @@ from utils.oracle_utils import gen_oracle_map
 from .base_trainer import BaseTrainer
 import time
 import os
-import cv2,kornia
 
 def _reorganize_batch(batch):
     reorg_batch = OrderedDict()
@@ -50,25 +49,42 @@ class CtdetLoss(torch.nn.Module):
         opt = self.opt
         batch = _reorganize_batch(ori_batch)
         hm_loss, wh_loss, off_loss, angle_loss = 0, 0, 0, 0
+        hm_loss_i, wh_loss_i, off_loss_i, angle_loss_i = 0, 0, 0, 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
                 output['hm'] = _sigmoid(output['hm'])
+                if opt.coord == 'Joint':
+                    output['hm_i'] = _sigmoid(output['hm_i'])
 
             if opt.eval_oracle_hm:
                 output['hm'] = batch['hm']
+                if opt.coord == 'Joint':
+                    output['hm_i'] = batch['hm_i']
             if opt.eval_oracle_wh:
                 output['wh'] = torch.from_numpy(gen_oracle_map(
                     batch['wh'].detach().cpu().numpy(),
                     batch['ind'].detach().cpu().numpy(),
                     output['wh'].shape[3], output['wh'].shape[2])).to(opt.device)
+                if opt.coord == 'Joint':
+                    output['wh_i'] = torch.from_numpy(gen_oracle_map(
+                        batch['wh_i'].detach().cpu().numpy(),
+                        batch['ind_i'].detach().cpu().numpy(),
+                        output['wh_i'].shape[3], output['wh_i'].shape[2])).to(opt.device)
             if opt.eval_oracle_offset:
                 output['reg'] = torch.from_numpy(gen_oracle_map(
                     batch['reg'].detach().cpu().numpy(),
                     batch['ind'].detach().cpu().numpy(),
                     output['reg'].shape[3], output['reg'].shape[2])).to(opt.device)
+                if opt.coord == 'Joint':
+                    output['reg_i'] = torch.from_numpy(gen_oracle_map(
+                        batch['reg_i'].detach().cpu().numpy(),
+                        batch['ind_i'].detach().cpu().numpy(),
+                        output['reg_i'].shape[3], output['reg_i'].shape[2])).to(opt.device)
 
             hm_loss += self.crit(output['hm'], batch['hm']) / opt.num_stacks
+            if opt.coord == 'Joint':
+                hm_loss_i += self.crit(output['hm_i'], batch['hm_i']) / opt.num_stacks
             
             # import ipdb; ipdb.set_trace()
             # if not os.path.exists('train_vis'):
@@ -100,36 +116,68 @@ class CtdetLoss(torch.nn.Module):
                 if opt.dense_wh:
                     mask_weight = batch['dense_wh_mask'].sum() + 1e-4
                     wh_loss += (
-                                       self.crit_wh(output['wh'] * batch['dense_wh_mask'],
+                                    self.crit_wh(output['wh'] * batch['dense_wh_mask'],
                                                     batch['dense_wh'] * batch['dense_wh_mask']) /
-                                       mask_weight) / opt.num_stacks
+                                    mask_weight) / opt.num_stacks
+                    if opt.coord == 'Joint':
+                        mask_weight = batch['dense_wh_mask_i'].sum() + 1e-4
+                        wh_loss_i += (
+                                        self.crit_wh(output['wh_i'] * batch['dense_wh_mask_i'],
+                                                        batch['dense_wh_i'] * batch['dense_wh_mask_i']) /
+                                        mask_weight) / opt.num_stacks
                 elif opt.cat_spec_wh:
                     wh_loss += self.crit_wh(
                         output['wh'], batch['cat_spec_mask'],
                         batch['ind'], batch['cat_spec_wh']) / opt.num_stacks
+                    if opt.coord == 'Joint':
+                        wh_loss_i += self.crit_wh(
+                            output['wh_i'], batch['cat_spec_mask_i'],
+                            batch['ind_i'], batch['cat_spec_wh_i']) / opt.num_stacks
                 else:
                     wh_loss += self.crit_reg(
                         output['wh'], batch['reg_mask'],
                         batch['ind'], batch['wh']) / opt.num_stacks
+                    if opt.coord == 'Joint':
+                        wh_loss_i += self.crit_reg(
+                            output['wh_i'], batch['reg_mask_i'],
+                            batch['ind_i'], batch['wh_i']) / opt.num_stacks
             if opt.polygon and (opt.angle_weight > 0):
-                angle_loss += self.crit_reg(
-                        output['angle'], batch['reg_mask'],
-                        batch['ind'], batch['angle']) / opt.num_stacks
+                if opt.coord in ['Global', 'Joint']:
+                    angle_loss += self.crit_reg(
+                            output['angle'], batch['reg_mask'],
+                            batch['ind'], batch['angle']) / opt.num_stacks
 
             if opt.reg_offset and opt.off_weight > 0:
                 off_loss += self.crit_reg(output['reg'], batch['reg_mask'],
-                                          batch['ind'], batch['reg']) / opt.num_stacks
+                                        batch['ind'], batch['reg']) / opt.num_stacks
+                if opt.coord == 'Joint':
+                    off_loss_i += self.crit_reg(output['reg_i'], batch['reg_mask_i'],
+                                            batch['ind_i'], batch['reg_i']) / opt.num_stacks
 
         if opt.polygon and (opt.angle_weight > 0):
-            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
-                    opt.off_weight * off_loss + opt.angle_weight * angle_loss
-            loss_stats = {'loss': loss, 'hm_loss': hm_loss,
-                    'wh_loss': wh_loss, 'off_loss': off_loss, 'angle_loss': angle_loss}
+            if opt.coord in ['Global', 'Local']:
+                loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
+                        opt.off_weight * off_loss + opt.angle_weight * angle_loss
+                loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                            'wh_loss': wh_loss, 'off_loss': off_loss, 'angle_loss': angle_loss}
+            elif opt.coord == 'Joint':
+                loss = opt.hm_weight * (hm_loss + hm_loss_i) + opt.wh_weight * (wh_loss + wh_loss_i) + \
+                        opt.off_weight * (off_loss + off_loss_i) + opt.angle_weight * angle_loss
+                loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                        'wh_loss': wh_loss, 'off_loss': off_loss, 'angle_loss': angle_loss, 
+                        'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i}
         else:
-            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
-                    opt.off_weight * off_loss
-            loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+            if opt.coord in ['Global', 'Local']:
+                loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
+                        opt.off_weight * off_loss
+                loss_stats = {'loss': loss, 'hm_loss': hm_loss,
                         'wh_loss': wh_loss, 'off_loss': off_loss}
+            elif opt.coord == 'Joint':
+                loss = opt.hm_weight * (hm_loss + hm_loss_i) + opt.wh_weight * (wh_loss + wh_loss_i) + \
+                        opt.off_weight * (off_loss + off_loss_i)
+                loss_stats = {'loss': loss, 
+                            'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss,
+                            'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i}
         return loss, loss_stats
 
 
@@ -141,6 +189,8 @@ class MultiAgentDetTrainer(BaseTrainer):
         loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
         if opt.polygon and (opt.angle_weight > 0):
             loss_states.append('angle_loss')
+        if opt.coord == 'Joint':
+            loss_states.extend(['hm_loss_i', 'wh_loss_i', 'off_loss_i'])
         loss = CtdetLoss(opt)
         return loss_states, loss
 

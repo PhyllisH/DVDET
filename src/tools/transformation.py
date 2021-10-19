@@ -22,7 +22,8 @@ def quaternion2euler(rotation):
 
 
 def _get_rotation_matrix(translation, rotation):
-    roll, pitch, yaw = quaternion2euler(rotation)
+    # roll, pitch, yaw = quaternion2euler(rotation)
+    yaw, pitch, roll = Quaternion(rotation).yaw_pitch_roll
     c_y = np.cos(yaw)
     s_y = np.sin(yaw)
     c_r = np.cos(roll)
@@ -348,7 +349,7 @@ def get_imgcoord2worldgrid_matrices(tranlation, rotation, camera_intrinsic, worl
     project_mat = np.linalg.inv(project_mat)
     return project_mat
 
-def get_imgcoord_matrices(tranlation, rotation, camera_intrinsic):
+def get_imgcoord_matrices(tranlation, rotation, camera_intrinsic, z0=0):
     im_position = tranlation.copy()
     im_position[2] = - im_position[2]
     im_position = np.array(im_position).reshape((3, 1))
@@ -358,6 +359,8 @@ def get_imgcoord_matrices(tranlation, rotation, camera_intrinsic):
     reverse_matrix = np.eye(3)
     reverse_matrix[0, 0] = -1
 
+    im_position[2] = im_position[2] - z0
+    
     mat = reverse_matrix @ Quaternion([0.5, -0.5, 0.5, -0.5]).rotation_matrix.T
     extrinsic_mat = np.hstack((im_rotation.rotation_matrix, - im_rotation.rotation_matrix @ im_position))
     extrinsic_mat = np.delete(extrinsic_mat, 2, 1)

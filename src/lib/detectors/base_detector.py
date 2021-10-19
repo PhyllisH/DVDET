@@ -21,7 +21,7 @@ class BaseDetector(object):
             opt.device = torch.device('cpu')
 
         print('Creating model...')
-        self.model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord)
+        self.model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode)
         self.model = load_model(self.model, opt.load_model)
         self.model = self.model.to(opt.device)
         self.model.eval()

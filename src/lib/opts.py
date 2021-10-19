@@ -228,8 +228,6 @@ class opts(object):
                                  help='use ground truth depth.')
 
         # coord mode
-        self.parser.add_argument('--coord_mode', default='local',
-                                 help='local | global')
         self.parser.add_argument('--message_mode', default='NO_MESSAGE',
                                  help=' NO_MESSAGE: no mesage ;  \
                                         SINGLE_GLOBAL_MESSAGE: max in global coord [then warp to each uav coord]; \
@@ -253,6 +251,10 @@ class opts(object):
         
         self.parser.add_argument('--map_scale', type=float, default=1.0,
                                  help='map scale')
+        self.parser.add_argument('--warp_mode', default='HW',
+                                 help='HW or LW')
+        self.parser.add_argument('--depth_mode', default='Unique',
+                                 help='Unique or Weighted')
 
     def parse(self, args=''):
         if args == '':
@@ -357,8 +359,13 @@ class opts(object):
             # assert opt.dataset in ['pascal', 'coco']
             opt.heads = {'hm': opt.num_classes,
                          'wh': 2 if not opt.cat_spec_wh else 2 * opt.num_classes}
+            if opt.coord == 'Joint':
+                opt.heads.update({'hm_i': opt.num_classes,
+                                  'wh_i': 2 if not opt.cat_spec_wh else 2 * opt.num_classes})
             if opt.reg_offset:
                 opt.heads.update({'reg': 2})
+                if opt.coord == 'Joint':
+                    opt.heads.update({'reg_i': 2})
             if opt.polygon:
                 opt.heads.update({'angle': 2})
         elif opt.task == 'multi_pose':

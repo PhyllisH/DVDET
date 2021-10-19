@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from typing import no_type_check
+from kornia.geometry.epipolar.projection import depth
 
 import torchvision.models as models
 import torch
@@ -25,7 +26,7 @@ _model_factory = {
 }
 
 
-def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord='Local'):
+def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique'):
     num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0
     arch = arch[:arch.find('_')] if '_' in arch else arch
     get_model = _model_factory[arch]
@@ -33,7 +34,7 @@ def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord=
         print('Trans_layer: ', trans_layer)
         print('Coord: ', coord)
         model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv,\
-                             message_mode=message_mode, trans_layer=trans_layer, coord=coord)
+                             message_mode=message_mode, trans_layer=trans_layer, coord=coord, warp_mode=warp_mode, depth_mode=depth_mode)
     else:
         model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv)
     return model

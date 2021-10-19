@@ -143,6 +143,9 @@ class MultiAgentDetDataset(data.Dataset):
         return c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w
 
     def load_sample(self, sample, img_dir, num_images=8):
+        ##############################################################
+        ###              Load Image Information                    ###
+        ##############################################################
         images_key = 'image'
         vehicles_key = 'vehicles_g_corners' 
         
@@ -151,6 +154,9 @@ class MultiAgentDetDataset(data.Dataset):
         vehicles_i = []
         category_idx = []
         trans_mats_list = []
+        trans_mats_list_05 = []
+        trans_mats_list_10 = []
+        trans_mats_list_15 = []
         shift_mats_list_1 = []
         shift_mats_list_2 = []
         shift_mats_list_4 = []
@@ -161,6 +167,9 @@ class MultiAgentDetDataset(data.Dataset):
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
             trans_mats_list.append(sample['trans_mat'])
+            trans_mats_list_05.append(sample['trans_mat_05'])
+            trans_mats_list_10.append(sample['trans_mat_10'])
+            trans_mats_list_15.append(sample['trans_mat_15'])
             vehicles_i.append(sample['vehicles_i'])
             shift_mats_list_1.append(sample['shift_mats'][1*scale])
             shift_mats_list_2.append(sample['shift_mats'][2*scale])
@@ -184,12 +193,18 @@ class MultiAgentDetDataset(data.Dataset):
                     vehicles.append(info[vehicles_key])
                     category_idx.append(info['category_id'])
                     trans_mats_list.append(info['trans_mat'])
+                    trans_mats_list_05.append(info['trans_mat_05'])
+                    trans_mats_list_10.append(info['trans_mat_10'])
+                    trans_mats_list_15.append(info['trans_mat_15'])
                     vehicles_i.append(info['vehicles_i'])
                     shift_mats_list_1.append(info['shift_mats'][1*scale])
                     shift_mats_list_2.append(info['shift_mats'][2*scale])
                     shift_mats_list_4.append(info['shift_mats'][4*scale])
                     shift_mats_list_8.append(info['shift_mats'][8*scale])
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
+        trans_mats_list_05 = np.concatenate([x[None,:,:] for x in trans_mats_list_05], axis=0)
+        trans_mats_list_10 = np.concatenate([x[None,:,:] for x in trans_mats_list_10], axis=0)
+        trans_mats_list_15 = np.concatenate([x[None,:,:] for x in trans_mats_list_15], axis=0)
         shift_mats_list_1 = np.concatenate([x[None,:,:] for x in shift_mats_list_1], axis=0)
         shift_mats_list_2 = np.concatenate([x[None,:,:] for x in shift_mats_list_2], axis=0)
         shift_mats_list_4 = np.concatenate([x[None,:,:] for x in shift_mats_list_4], axis=0)
@@ -197,16 +212,22 @@ class MultiAgentDetDataset(data.Dataset):
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample
         c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w = self.get_aug(height, width)
+        draw_gaussian_i = draw_msra_gaussian if self.opt.mse_loss else \
+            draw_umich_gaussian
+        draw_gaussian = draw_msra_gaussian
+        # draw_gaussian = draw_umich_gaussian
 
-        # output_h, output_w = 512, 512
-        output_h, output_w = int(192/scale), int(352/scale)
+        ##############################################################
+        ###              Generate BEV GT Supervision               ###
+        ##############################################################
+        output_h_bev, output_w_bev = int(192/scale), int(352/scale)
 
         num_classes = self.num_classes
-        hm = np.zeros((num_images, num_classes, output_h, output_w), dtype=np.float32)
+        hm = np.zeros((num_images, num_classes, output_h_bev, output_w_bev), dtype=np.float32)
         wh = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
         angle = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
         angle[:,:,1] = 1.0
-        dense_wh = np.zeros((num_images, 2, output_h, output_w), dtype=np.float32)
+        dense_wh = np.zeros((num_images, 2, output_h_bev, output_w_bev), dtype=np.float32)
         reg = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
         ind = np.zeros((num_images, self.max_objs), dtype=np.int64)
         reg_mask = np.zeros((num_images, self.max_objs), dtype=np.uint8)
@@ -216,20 +237,22 @@ class MultiAgentDetDataset(data.Dataset):
         
         # ----------- TransMat ------------- #
         trans_mats = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_05 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_10 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_15 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_1 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_2 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_4 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_8 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         
         trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
+        trans_mats_05[:min(num_images, len(trans_mats_list))] = trans_mats_list_05[:min(num_images, len(trans_mats_list))]
+        trans_mats_10[:min(num_images, len(trans_mats_list))] = trans_mats_list_10[:min(num_images, len(trans_mats_list))]
+        trans_mats_15[:min(num_images, len(trans_mats_list))] = trans_mats_list_15[:min(num_images, len(trans_mats_list))]
         shift_mats_1[:min(num_images, len(trans_mats_list))] = shift_mats_list_1[:min(num_images, len(shift_mats_1))]
         shift_mats_2[:min(num_images, len(trans_mats_list))] = shift_mats_list_2[:min(num_images, len(shift_mats_2))]
         shift_mats_4[:min(num_images, len(trans_mats_list))] = shift_mats_list_4[:min(num_images, len(shift_mats_4))]
         shift_mats_8[:min(num_images, len(trans_mats_list))] = shift_mats_list_8[:min(num_images, len(shift_mats_8))]
-
-        # draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else \
-        #     draw_umich_gaussian
-        draw_gaussian = draw_msra_gaussian
 
         gt_dets = []
         for index, info in enumerate(zip(images, vehicles, vehicles_i, category_idx)):
@@ -252,55 +275,49 @@ class MultiAgentDetDataset(data.Dataset):
             # worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
             # worldgrid2worldcoord_mat = np.array([[1/input_w, 0, 0], [0, 1/input_h, 0], [0, 0, 1]])
             # worldgrid2worldcoord_mat = np.array([[1/(output_w), 0, 0], [0, 1/(output_h), 0], [0, 0, 1]])
-            worldgrid2worldcoord_mat = np.array([[scale/(500), 0, 0], [0, scale/(500), 0], [0, 0, 1]])
+            # worldgrid2worldcoord_mat = np.array([[scale/(500), 0, 0], [0, scale/(500), 0], [0, 0, 1]])
+            worldgrid2worldcoord_mat = np.array([[scale, 0, 0], [0, scale, 0], [0, 0, 1]])
             map_mat = np.array([[1/scale, 0, 0], [0, 1/scale, 0], [0, 0, 1]])
             for k in range(num_objs):
                 cls_id = int(self.cat_ids[category_ids[k]])
-                if self.opt.coord == 'Global':
-                    # # ########## Get BEV Global coord from the transformation of UAV rectangle #####
-                    # print('----------------- UAV2BEV ----------------')
-                    # bbox = self._coco2polygon(objs_i[k])  # (2, 4)
-                    # if flipped:
-                    #     bbox[0] = width - bbox[0] - 1
-                    # coord = np.concatenate([bbox, np.ones([1, bbox.shape[-1]])], axis=0)  # (3, 4)
-                    # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
-                    # coord_warp = cur_trans_mats @ coord
-                    # coord_warp = coord_warp / coord_warp[2, :]
-                    # # print('UAV2BEV: ', coord_warp)
-                    # coord_warp = trans_output @ coord_warp  # (3, 4)
-                    # # print('UAV2BEV image: ', coord_warp)
+                # # ########## Get BEV Global coord from the transformation of UAV rectangle #####
+                # print('----------------- UAV2BEV ----------------')
+                # bbox = self._coco2polygon(objs_i[k])  # (2, 4)
+                # if flipped:
+                #     bbox[0] = width - bbox[0] - 1
+                # coord = np.concatenate([bbox, np.ones([1, bbox.shape[-1]])], axis=0)  # (3, 4)
+                # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+                # coord_warp = cur_trans_mats @ coord
+                # coord_warp = coord_warp / coord_warp[2, :]
+                # # print('UAV2BEV: ', coord_warp)
+                # coord_warp = trans_output @ coord_warp  # (3, 4)
+                # # print('UAV2BEV image: ', coord_warp)
 
-                    # ########## Get BEV Global coord #####
-                    # print('----------------- BEV ----------------')
-                    # print(objs[k])
-                    coord = np.array(objs[k]).reshape([4,2])
-                    # print('BEV: ', coord)
-                    coord = np.concatenate([coord.T, np.ones([1, coord.shape[0]])], axis=0)
-                    coord_warp = get_shift_coord(coord, shift_mats_1[index]@map_mat)
-                    # coord_warp = trans_output @ coord
-                    # print('BEV image: ', coord_warp)
-                    if self.opt.polygon:
-                        bbox = self._get_polygon_gt(coord_warp[:2]) # (x,y,w,h,sin,cos)
-                        gt_polygon = coord_warp[:2]
-                    else:
-                        bbox = self._2d_bounding_box(coord_warp)
+                # ########## Get BEV Global coord #####
+                # print('----------------- BEV ----------------')
+                # print(objs[k])
+                coord = np.array(objs[k]).reshape([4,2])
+                # print('BEV: ', coord)
+                coord = np.concatenate([coord.T, np.ones([1, coord.shape[0]])], axis=0)
+                coord_warp = get_shift_coord(coord, shift_mats_1[index]@map_mat)
+                # coord_warp = trans_output @ coord
+                # print('BEV image: ', coord_warp)
+                if self.opt.polygon:
+                    bbox = self._get_polygon_gt(coord_warp[:2]) # (x,y,w,h,sin,cos)
+                    gt_polygon = coord_warp[:2]
                 else:
-                    bbox = self._coco_box_to_bbox(objs[k])
-                    if flipped:
-                        bbox[[0, 2]] = width - bbox[[2, 0]] - 1
-                    bbox[:2] = affine_transform(bbox[:2], trans_output)
-                    bbox[2:] = affine_transform(bbox[2:], trans_output)
+                    bbox = self._2d_bounding_box(coord_warp)
                 
                 if self.opt.polygon:
-                    bbox[0] = np.clip(bbox[0], 0, output_w - 1)
-                    bbox[1] = np.clip(bbox[1], 0, output_h - 1)
+                    bbox[0] = np.clip(bbox[0], 0, output_w_bev - 1)
+                    bbox[1] = np.clip(bbox[1], 0, output_h_bev - 1)
                     h, w = bbox[3], bbox[2]
                     ct = np.array(
                         [bbox[0], bbox[1]], dtype=np.float32)
                     ct_int = ct.astype(np.int32)
                 else:
-                    bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w - 1)
-                    bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
+                    bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w_bev - 1)
+                    bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h_bev - 1)
                     h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
                     ct = np.array(
                         [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
@@ -317,7 +334,7 @@ class MultiAgentDetDataset(data.Dataset):
                     # else:
                     draw_gaussian(hm[index, cls_id], ct_int, radius)
                     wh[index, k] = 1. * w, 1. * h
-                    ind[index, k] = ct_int[1] * output_w + ct_int[0]
+                    ind[index, k] = ct_int[1] * output_w_bev + ct_int[0]
                     reg[index, k] = ct - ct_int
                     reg_mask[index, k] = 1
                     cat_spec_wh[index, k, cls_id * 2: cls_id * 2 + 2] = wh[index, k]
@@ -343,45 +360,149 @@ class MultiAgentDetDataset(data.Dataset):
                 gt_det = np.zeros((1, 6), dtype=np.float32)
             gt_dets.append(gt_det)
 
-            if len(np.where(hm[index,0])[0]) > 0:
-                cv2.imwrite('hm.png', (hm[index,0]*255).astype('uint8'))
-                # print(np.where(hm[index,0]))
-                save_img = (aug_imgs[index]*255).astype('uint8').transpose(1,2,0)
-                cv2.imwrite('ori.png', save_img)
-                # cur_trans_mats = np.linalg.inv(trans_mats[0] @ worldgrid2worldcoord_mat @ np.linalg.inv(np.concatenate([trans_output, np.array([0, 0, 1]).reshape([1,3])], axis=0)))
-                # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
-                cur_trans_mats = shift_mats_1[index] @ np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
-                data = kornia.image_to_tensor(save_img, keepdim=False)
-                data_warp = kornia.warp_perspective(data.float(),
-                                                    torch.tensor(cur_trans_mats).repeat([1, 1, 1]).float(),
-                                                    dsize=(output_h, output_w))
-                # convert back to numpy
-                img_warp = kornia.tensor_to_image(data_warp.byte())
-                img_warp = cv2.resize(img_warp, dsize=(output_w, output_h))
-                heatmap = (hm[index,0].reshape([output_h, output_w, 1]).repeat(3, axis=-1)*255).astype('uint8')
-                img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
-                cv2.imwrite('ori_warp.png', img_warp)
+            # if len(np.where(hm[index,0])[0]) > 0:
+            #     cv2.imwrite('hm.png', (hm[index,0]*255).astype('uint8'))
+            #     # print(np.where(hm[index,0]))
+            #     save_img = (aug_imgs[index]*255).astype('uint8').transpose(1,2,0)
+            #     cv2.imwrite('ori.png', save_img)
+            #     # cur_trans_mats = np.linalg.inv(trans_mats[0] @ worldgrid2worldcoord_mat @ np.linalg.inv(np.concatenate([trans_output, np.array([0, 0, 1]).reshape([1,3])], axis=0)))
+            #     # cur_trans_mats = np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+            #     cur_trans_mats = shift_mats_1[index] @ np.linalg.inv(trans_mats[index] @ worldgrid2worldcoord_mat)
+            #     data = kornia.image_to_tensor(save_img, keepdim=False)
+            #     data_warp = kornia.warp_perspective(data.float(),
+            #                                         torch.tensor(cur_trans_mats).repeat([1, 1, 1]).float(),
+            #                                         dsize=(output_h_bev, output_w_bev))
+            #     # convert back to numpy
+            #     img_warp = kornia.tensor_to_image(data_warp.byte())
+            #     # img_warp = cv2.resize(img_warp, dsize=(output_w_bev, output_h_bev))
+            #     heatmap = (hm[index,0].reshape([output_h_bev, output_w_bev, 1]).repeat(3, axis=-1)*255).astype('uint8')
+            #     img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
+            #     cv2.imwrite('ori_warp.png', img_warp)
+        
+        # GTs in UAV (Image Coord)
+        hm_i = np.zeros((num_images, num_classes, output_h, output_w), dtype=np.float32)
+        wh_i = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
+        dense_wh_i = np.zeros((num_images, 2, output_h, output_w), dtype=np.float32)
+        reg_i = np.zeros((num_images, self.max_objs, 2), dtype=np.float32)
+        ind_i = np.zeros((num_images, self.max_objs), dtype=np.int64)
+        reg_mask_i = np.zeros((num_images, self.max_objs), dtype=np.uint8)
+        cat_spec_wh_i = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.float32)
+        cat_spec_mask_i = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.uint8)
 
-        return c, s, aug_imgs, trans_mats, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets
+        gt_dets_i = []
+        for index, info in enumerate(zip(images, vehicles_i, category_idx)):
+            img, objs_i, category_ids = info
+
+            gt_det_i = []
+            num_objs = len(objs_i)
+            for k in range(num_objs):
+                cls_id = int(self.cat_ids[category_ids[k]])
+
+                # UAV coord GTs
+                bbox_i = self._coco_box_to_bbox(objs_i[k])
+                if flipped:
+                    bbox_i[[0, 2]] = width - bbox_i[[2, 0]] - 1
+                bbox_i[:2] = affine_transform(bbox_i[:2], trans_output)
+                bbox_i[2:] = affine_transform(bbox_i[2:], trans_output)
+
+                bbox_i[[0, 2]] = np.clip(bbox_i[[0, 2]], 0, output_w - 1)
+                bbox_i[[1, 3]] = np.clip(bbox_i[[1, 3]], 0, output_h - 1)
+                h_i, w_i = bbox_i[3] - bbox_i[1], bbox_i[2] - bbox_i[0]
+                ct_i = np.array(
+                    [(bbox_i[0] + bbox_i[2]) / 2, (bbox_i[1] + bbox_i[3]) / 2], dtype=np.float32)
+                ct_int_i = ct_i.astype(np.int32)
+
+                if h_i > 0 and w_i > 0:
+                    radius = gaussian_radius((math.ceil(h_i), math.ceil(w_i)))
+                    radius = max(0, int(radius))
+                    radius = self.opt.hm_gauss if self.opt.mse_loss else radius
+                    draw_gaussian_i(hm_i[index, cls_id], ct_int_i, radius)
+                    wh_i[index, k] = 1. * w_i, 1. * h_i
+                    ind_i[index, k] = ct_int_i[1] * output_w + ct_int_i[0]
+                    reg_i[index, k] = ct_i - ct_int_i
+                    reg_mask_i[index, k] = 1
+                    cat_spec_wh_i[index, k, cls_id * 2: cls_id * 2 + 2] = wh_i[index, k]
+                    cat_spec_mask_i[index, k, cls_id * 2: cls_id * 2 + 2] = 1
+                    if self.opt.dense_wh:
+                        draw_dense_reg(dense_wh_i[index], hm_i.max(axis=1), ct_int_i, wh_i[index, k], radius)
+                                        
+                    cur_gt_det = [ct_i[0] - w_i / 2, ct_i[1] - h_i / 2,
+                                ct_i[0] + w_i / 2, ct_i[1] + h_i / 2, 1, cls_id]
+                    gt_det_i.append(cur_gt_det)
+            
+            if len(gt_det_i) > 0:
+                gt_det_i = np.array(gt_det_i, dtype=np.float32)
+            else:
+                gt_det_i = np.zeros((1, 6), dtype=np.float32)
+            gt_dets_i.append(gt_det_i)
+            
+            # if len(np.where(hm_i[index,0])[0]) > 0:
+            #     cv2.imwrite('hm_UAV.png', (hm_i[index,0]*255).astype('uint8'))
+            #     save_img = (aug_imgs[index]*255).astype('uint8').transpose(1,2,0)
+            #     img_warp = cv2.resize(save_img, dsize=(output_w, output_h))
+            #     heatmap = (hm_i[index,0].reshape([output_h, output_w, 1]).repeat(3, axis=-1)*255).astype('uint8')
+            #     img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
+            #     cv2.imwrite('ori_warp_UAV.png', img_warp)
+
+        return c, s, aug_imgs, trans_mats, trans_mats_05, trans_mats_10, trans_mats_15, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \
+                    hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets, \
+                    hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i
 
     def __getitem__(self, index):
         sample = self.samples[index]
         img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
-        c, s, aug_imgs, trans_mats, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det = self.load_sample(sample, img_dir, num_images=self.num_agents)
-        ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, \
-                'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
+        c, s, aug_imgs, trans_mats, trans_mats_05, trans_mats_10, trans_mats_15, \
+            shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \
+            hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det, \
+            hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i = self.load_sample(sample, img_dir, num_images=self.num_agents)
+        if self.opt.coord == 'Joint':
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15,\
+                    'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, \
+                    'hm_i': hm_i, 'reg_mask_i': reg_mask_i, 'ind_i': ind_i, 'wh_i': wh_i, \
+                    'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
+        elif self.opt.coord == 'Global':
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15, \
+                    'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, 
+                    'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
+        elif self.opt.coord == 'Local':
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15, \
+                    'hm': hm_i, 'reg_mask': reg_mask_i, 'ind': ind_i, 'wh': wh_i, \
+                    'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)
             dense_wh_mask = np.concatenate([hm_a, hm_a], axis=1)
-            ret.update({'dense_wh': dense_wh, 'dense_wh_mask': dense_wh_mask})
+            hm_a_i = hm_i.max(axis=1, keepdims=True)
+            dense_wh_mask_i = np.concatenate([hm_a_i, hm_a_i], axis=1)
+            if self.opt.coord == 'Global':
+                ret.update({'dense_wh': dense_wh, 'dense_wh_mask': dense_wh_mask})
+            elif self.opt.coord == 'Local':
+                ret.update({'dense_wh': dense_wh_i, 'dense_wh_mask': dense_wh_mask_i})
+            elif self.opt.coord == 'Joint':
+                ret.update({'dense_wh': dense_wh, 'dense_wh_mask': dense_wh_mask})
+                ret.update({'dense_wh_i': dense_wh_i, 'dense_wh_mask_i': dense_wh_mask_i})
             del ret['wh']
+            del ret['wh_i']
         elif self.opt.cat_spec_wh:
-            ret.update({'cat_spec_wh': cat_spec_wh, 'cat_spec_mask': cat_spec_mask})
+            if self.opt.coord == 'Global':
+                ret.update({'cat_spec_wh': cat_spec_wh, 'cat_spec_mask': cat_spec_mask})
+            elif self.opt.coord == 'Local':
+                ret.update({'cat_spec_wh': cat_spec_wh_i, 'cat_spec_mask': cat_spec_mask_i})
+            elif self.opt.coord == 'Joint':
+                ret.update({'cat_spec_wh': cat_spec_wh, 'cat_spec_mask': cat_spec_mask})
+                ret.update({'cat_spec_wh_i': cat_spec_wh_i, 'cat_spec_mask_i': cat_spec_mask_i})
             del ret['wh']
+            del ret['wh_i']
         if self.opt.reg_offset:
-            ret.update({'reg': reg})
+            if self.opt.coord == 'Global':
+                ret.update({'reg': reg})
+            elif self.opt.coord == 'Local':
+                ret.update({'reg': reg_i})
+            elif self.opt.coord == 'Joint':
+                ret.update({'reg': reg})
+                ret.update({'reg_i': reg_i})
         if self.opt.debug > 0 or not self.split == 'train':
             gt_det = gt_det if len(gt_det) > 0 else [np.zeros((1, 6), dtype=np.float32)]
-            meta = {'c': c, 's': s, 'gt_det': gt_det, 'sample_id': index}
+            gt_dets_i = gt_dets_i if len(gt_dets_i) > 0 else [np.zeros((1, 6), dtype=np.float32)]
+            meta = {'c': c, 's': s, 'gt_dets': gt_det, 'gt_dets_i': gt_dets_i, 'sample_id': index}
             ret['meta'] = meta
         return ret

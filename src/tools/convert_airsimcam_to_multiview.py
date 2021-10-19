@@ -194,7 +194,8 @@ def convert_multiview_coco(town_id=1, height=40):
     image_W = 800
     world_X_left = town_config[town_id]['world_X_left']
     world_Y_left = town_config[town_id]['world_Y_left']
-    worldgrid2worldcoord_mat = np.array([[world_X, 0, -world_X_left], [0, world_Y, -world_Y_left], [0, 0, 1]])
+    worldgrid2worldcoord_mat = np.array([[1, 0, -world_X_left], [0, 1, -world_Y_left], [0, 0, 1]])
+    # worldgrid2worldcoord_mat = np.array([[world_X, 0, -world_X_left], [0, world_Y, -world_Y_left], [0, 0, 1]])
     # worldgrid2worldcoord_mat = np.array([[world_X/image_W, 0, -world_X_left], [0, world_Y/image_H, -world_Y_left], [0, 0, 1]])
     # worldgrid2worldcoord_mat = np.array([[1, 0, -200], [0, 1, -250], [0, 0, 1]])
     #######################################################
@@ -207,8 +208,17 @@ def convert_multiview_coco(town_id=1, height=40):
     # data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
     # nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
     # data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
-    data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15/'
-    nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+    # data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15/'
+    # nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+    if town_id == 0:
+        data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+        nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+    else:
+        if town_id == 1:
+            data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+        elif town_id == 2:
+            data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m'
+        nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
 
     if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations')):
         os.makedirs(os.path.join(data_dir, 'multiagent_annotations'))
@@ -255,6 +265,8 @@ def convert_multiview_coco(town_id=1, height=40):
                 UAV_cams.sort()
                 for UAV_id in UAV_idx:
                     for UAV_cam in UAV_cams:
+                        # if UAV_cam != 'BOTTOM':
+                        #     continue
                         image_id += 1
                         cur_UAV_sample = OrderedDict()
                         # camera info
@@ -267,6 +279,10 @@ def convert_multiview_coco(town_id=1, height=40):
                         cur_UAV_sample['trans_mat'] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                       calibrated_record["rotation"].copy(),
                                                       camera_intrinsic) @ worldgrid2worldcoord_mat
+                        for z0 in [0.5, 1.0, 1.5]:
+                            cur_UAV_sample['trans_mat_{:02d}'.format(int(z0*10))] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
+                                                        calibrated_record["rotation"].copy(),
+                                                        camera_intrinsic, z0=z0) @ worldgrid2worldcoord_mat
                         im_position = calibrated_record["translation"].copy()
                         im_position[2] = -im_position[2]
                         im_rotation = calibrated_record["rotation"].copy()
@@ -312,7 +328,7 @@ def convert_multiview_coco(town_id=1, height=40):
                         cur_UAV_sample['image_id'] = image_id
 
                         shift_mats = OrderedDict()
-                        for scale in [1/2, 1, 2, 4, 8, 16]:
+                        for scale in [1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 32, 64]:
                             cur_shift_mat = get_crop_shift_mat(tranlation=calibrated_record["translation"].copy(), \
                                                             rotation=calibrated_record["rotation"].copy(), \
                                                             sensor_type=UAV_cam, map_scale_w=scale, map_scale_h=scale, \
@@ -439,11 +455,11 @@ def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/'):
                 json.dump(annos, f)
 
 if __name__ == '__main__':
-    # convert_multiview_coco(height=40)
-    # convert_multiview_coco(height=60)
-    # convert_multiview_coco(height=80)
-    # convert_multiview_coco(height=100)
     convert_multiview_coco(town_id=0, height=40)
+    # convert_multiview_coco(town_id=1, height=40)
+    # convert_multiview_coco(town_id=1, height=60)
+    # convert_multiview_coco(town_id=1, height=80)
+    # convert_multiview_coco(town_id=1, height=100)
     # convert_multiview_coco(town_id=2, height=40)
     # convert_multiview_coco(town_id=2, height=60)
     # convert_multiview_coco(town_id=2, height=80)

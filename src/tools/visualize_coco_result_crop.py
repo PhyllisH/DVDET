@@ -61,12 +61,13 @@ def BoxCoordTrans(coord, translation, rotation, mode='L2G', with_rotat=False, se
     project_mat = get_imgcoord_matrices(translation.copy(), rotation.copy(), camera_intrinsic)
     project_mat = project_mat @ default_worldgrid2worldcoord_mat
     # project_mat = project_mat @ worldgrid2worldcoord_mat
+    if with_rotat:
+        rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, 1, 1, world_X_left, world_Y_left)
+
     if mode == 'L2G':
-        project_mat = np.linalg.inv(project_mat)
+        project_mat = rotat_mat @ np.linalg.inv(project_mat) if with_rotat else np.linalg.inv(project_mat)
     else:
-        if with_rotat:
-            rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, map_scale_w, map_scale_h, world_X_left, world_Y_left)
-            project_mat = project_mat @ np.linalg.inv(rotat_mat)
+        project_mat = project_mat @ np.linalg.inv(rotat_mat) if with_rotat else project_mat
 
     coord = np.concatenate([coord[:2], np.ones([1, coord.shape[1]])], axis=0)
     coord_warp = project_mat @ coord
@@ -243,7 +244,8 @@ def visualize_result():
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_Baseline_MapScale1/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_Baseline_MapScale2/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Baseline_Town5/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_V2V_MapScale2/results.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_V2V_MapScale2/results.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1/results_Global.json')
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
     res_annos_all = json.load(open(result_path))

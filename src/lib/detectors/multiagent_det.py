@@ -66,12 +66,22 @@ class MultiAgentDetector(BaseDetector):
             images = np.concatenate((images, images[:, :, :, ::-1]), axis=0)
         images = torch.from_numpy(images)
 
+        meta_i = {'c': c, 's': s,
+                'out_height': inp_height // self.opt.down_ratio,
+                'out_width': inp_width // self.opt.down_ratio}
+
         c = np.array([352/(2*self.opt.map_scale), 192/(2*self.opt.map_scale)])
         s = np.array([352/(self.opt.map_scale), 192/(self.opt.map_scale)])
         meta = {'c': c, 's': s,
                 'out_height': 192/(self.opt.map_scale),
                 'out_width': 352/(self.opt.map_scale)}
-        return images, meta
+        
+        if self.opt.coord == 'Local':
+            return images, meta_i
+        elif self.opt.coord == 'Global':
+            return images, meta
+        elif self.opt.coord == 'Joint':
+            return images, [meta, meta_i]
 
     def process(self, images, trans_mats, shift_mats, return_time=False):
         with torch.no_grad():
@@ -80,14 +90,29 @@ class MultiAgentDetector(BaseDetector):
             wh = output['wh']
             reg = output['reg'] if self.opt.reg_offset else None
             angle = output['angle'] if self.opt.polygon else None # (sin, cos)
+            if self.opt.coord == 'Joint':
+                hm_i = output['hm_i'].sigmoid_()
+                wh_i = output['wh_i']
+                reg_i = output['reg_i'] if self.opt.reg_offset else None
+                
             if self.opt.flip_test:
                 hm = (hm[0:1] + flip_tensor(hm[1:2])) / 2
                 wh = (wh[0:1] + flip_tensor(wh[1:2])) / 2
                 reg = reg[0:1] if reg is not None else None
+                if self.opt.coord == 'Joint':
+                    hm_i = (hm_i[0:1] + flip_tensor(hm_i[1:2])) / 2
+                    wh_i = (wh_i[0:1] + flip_tensor(wh_i[1:2])) / 2
+                    reg_i = reg_i[0:1] if reg_i is not None else None
             torch.cuda.synchronize()
             forward_time = time.time()
-            dets = ctdet_decode(hm, wh, map_scale=self.opt.map_scale, shift_mats=shift_mats[0], reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
-
+            if self.opt.coord == 'Local':
+                dets = dets = ctdet_decode(hm, wh, map_scale=None, shift_mats=None, reg=reg, angle=None, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+            elif self.opt.coord == 'Global':
+                dets = ctdet_decode(hm, wh, map_scale=self.opt.map_scale, shift_mats=shift_mats[0], reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+            else:
+                dets_bev = ctdet_decode(hm, wh, map_scale=self.opt.map_scale, shift_mats=shift_mats[0], reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+                dets_uav = ctdet_decode(hm_i, wh_i, map_scale=None, shift_mats=None, reg=reg_i, angle=None, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+                dets = [dets_bev, dets_uav]
         if return_time:
             return output, dets, forward_time
         else:
@@ -206,15 +231,21 @@ class MultiAgentDetector(BaseDetector):
             if not pre_processed:
                 images, meta = self.pre_process(image, scale, meta)
             else:
-                # import pdb; pdb.set_trace()
                 images = pre_processed_images['images'][scale]
                 meta = pre_processed_images['meta'][scale]
-                meta = {k: v.numpy()[0] for k, v in meta.items()}
-                trans_mats = pre_processed_images['trans_mats']
+                if isinstance(meta, list):
+                    updated_meta = []
+                    for cur_meta in meta:
+                        updated_meta.append({k: v.numpy()[0] for k, v in cur_meta.items()})
+                    meta = updated_meta
+                else:
+                    meta = {k: v.numpy()[0] for k, v in meta.items()}
+                trans_mats = [pre_processed_images['trans_mats'], pre_processed_images['trans_mats_05'], \
+                                pre_processed_images['trans_mats_10'], pre_processed_images['trans_mats_15']]
                 shift_mats = [pre_processed_images['shift_mats_1'], pre_processed_images['shift_mats_2'], \
                                 pre_processed_images['shift_mats_4'], pre_processed_images['shift_mats_8']]
             images = images.to(self.opt.device)
-            trans_mats = trans_mats.to(self.opt.device)
+            trans_mats = [x.to(self.opt.device) for x in trans_mats]
             shift_mats = [x.to(self.opt.device) for x in shift_mats]
             torch.cuda.synchronize()
             pre_process_time = time.time()
@@ -231,10 +262,20 @@ class MultiAgentDetector(BaseDetector):
             
             if self.opt.vis_weight_mats:
                 self.save_attn_weights(img_idx, images, output)
-
-            for i in range(len(dets)):
-                detections.append(self.post_process(dets[i:i+1], meta, scale))
-                results.append(self.merge_outputs([detections[-1]]))
+            
+            if isinstance(dets, list):
+                for cur_dets, cur_meta in zip(dets, meta):
+                    cur_detections = []
+                    cur_results = []
+                    for i in range(len(cur_dets)):
+                        cur_detections.append(self.post_process(cur_dets[i:i+1], cur_meta, scale))
+                        cur_results.append(self.merge_outputs([cur_detections[-1]]))
+                    detections.append(cur_detections)
+                    results.append(cur_results)
+            else:
+                for i in range(len(dets)):
+                    detections.append(self.post_process(dets[i:i+1], meta, scale))
+                    results.append(self.merge_outputs([detections[-1]]))
             torch.cuda.synchronize()
             post_process_time = time.time()
             post_time += post_process_time - decode_time

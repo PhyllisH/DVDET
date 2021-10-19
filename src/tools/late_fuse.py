@@ -46,37 +46,58 @@ except:
     print('NMS not imported! If you need it,'
           ' do \n cd $CenterNet_ROOT/src/lib/external \n make')
 
-from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord
+from transformation import get_imgcoord2worldgrid_matrices, get_imgcoord_matrices, get_worldcoord_from_imagecoord, get_crop_shift_mat
 
 
 ####################### Default Settings #########################
 MAX_PER_IMAGE = 100
+# dataset_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15'
+dataset_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+# dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
 camera_intrinsic = [[400.0, 0.0, 400.0],
                         [0.0, 400.0, 225.0],
                         [0.0, 0.0, 1.0]]
 camera_intrinsic = np.array(camera_intrinsic)
 # worldgrid2worldcoord_mat = np.array([[1, 0, -100], [0, 1, -100], [0, 0, 1]])
-scale_h = 450/500
-scale_w = 800/500
-worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -200], [0, 1/scale_h, -250], [0, 0, 1]])
-image_size = (int(500*scale_h), int(500*scale_w))
-img_h = 450
-img_w = 800
+# scale_h = 450/500 * 4
+# scale_w = 800/500 * 4
+scale_h = 500/500 * 4
+scale_w = 500/500 * 4
+map_scale_h = 1 / scale_h
+map_scale_w = 1 / scale_w
+world_X_left = 200
+world_Y_left = 250
+with_rotat = True
+worldgrid2worldcoord_mat = np.array([[1/scale_w, 0, -world_X_left], [0, 1/scale_h, -world_Y_left], [0, 0, 1]])
+# default_worldgrid2worldcoord_mat = np.array([[500/800, 0, -200], [0, 500/450, -250], [0, 0, 1]])
+default_worldgrid2worldcoord_mat = np.array([[1, 0, -world_X_left], [0, 1, -world_Y_left], [0, 0, 1]])
+# image_size = (int(500*scale_h), int(500*scale_w))
+image_size = (int(192/map_scale_h), int(352/map_scale_w))
 # image_size = (int(500*scale_h), int(300*scale_w))
 # image_size = (225, 400)
+img_h = 450
+img_w = 800
 ##################################################################
 
-def BoxCoordTrans(coord, tranlation, rotation, mode='L2G'):
-    project_mat = get_imgcoord_matrices(tranlation.copy(), rotation.copy(), camera_intrinsic)
-    project_mat = project_mat @ worldgrid2worldcoord_mat
+def BoxCoordTrans(coord, translation, rotation, mode='L2G', with_rotat=False, sensor_type="BOTTOM"):
+    project_mat = get_imgcoord_matrices(translation.copy(), rotation.copy(), camera_intrinsic)
+    project_mat = project_mat @ default_worldgrid2worldcoord_mat
+    # project_mat = project_mat @ worldgrid2worldcoord_mat
+    
+    if with_rotat:
+        rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, 1, 1, world_X_left, world_Y_left)
+
     if mode == 'L2G':
-        project_mat = np.linalg.inv(project_mat)
+        project_mat = rotat_mat @ np.linalg.inv(project_mat) if with_rotat else np.linalg.inv(project_mat)
+    else:
+        project_mat = project_mat @ np.linalg.inv(rotat_mat) if with_rotat else project_mat
+
     coord = np.concatenate([coord[:2], np.ones([1, coord.shape[1]])], axis=0)
     coord_warp = project_mat @ coord
-    coord_warp = coord_warp[:2] / coord_warp[2, :]
+    coord_warp = coord_warp / coord_warp[2, :]
     return coord_warp
 
-def ImgCoordTrans(image, translation, rotation, mode='L2G'):
+def ImgCoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, sensor_type='BOTTOM'):
     """
     Coordnate transform:
         mode: 'L2G' from local (uav) to global
@@ -85,6 +106,7 @@ def ImgCoordTrans(image, translation, rotation, mode='L2G'):
     :translation and rotation: local coord
     :return: img_warp <h, w, c> 
     """
+    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     project_mat = get_imgcoord2worldgrid_matrices(translation.copy(),
                                                       rotation.copy(),
                                                       camera_intrinsic,
@@ -94,7 +116,10 @@ def ImgCoordTrans(image, translation, rotation, mode='L2G'):
         trans_mat = project_mat
     else:
         trans_mat = np.linalg.inv(project_mat)
-        
+    
+    if with_rotat:
+        rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, map_scale_w, map_scale_h, world_X_left, world_Y_left)
+        trans_mat = rotat_mat@trans_mat
     data = kornia.image_to_tensor(image, keepdim=False)
     data_warp = kornia.warp_perspective(data.float(),
                                         torch.tensor(trans_mat).repeat([1, 1, 1]).float(),
@@ -104,22 +129,27 @@ def ImgCoordTrans(image, translation, rotation, mode='L2G'):
     img_warp = kornia.tensor_to_image(data_warp.byte())
     return img_warp
 
-def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1):
+def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1, scale=1):
     for anno in annos:
         if anno.get('score', 0) > vis_thre:
             bbox = anno['bbox']
+            bbox = [x*scale for x in bbox]
             x, y, w, h = bbox
             image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, 1)
     return image
 
-def test_coord(sensor, coco_, annos, trans_annos, vis_score_thre=0.3):
+def test_coord(sensor, coco_, annos, trans_annos, gt_annos=None, gt_trans_annos=None, vis_score_thre=0.3):
     img_id = sensor['image_id']
+    sensor_type = sensor['image'].split('/')[1].split('_')[1]
     img = coco_.loadImgs(img_id)[0]
-    dataset_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene')
     image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
-    image_g = ImgCoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
+    image_g = ImgCoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=with_rotat, sensor_type=sensor_type)
     image_up = vis_cam(image_u.copy(), annos, color=(0, 0, 255), vis_thre=vis_score_thre)
-    image_gp = vis_cam(image_g.copy(), trans_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
+    if gt_annos is not None:
+        image_up = vis_cam(image_up.copy(), gt_annos, color=(0, 255, 0), vis_thre=-1)
+    image_gp = vis_cam(image_g.copy(), trans_annos, color=(0, 0, 255), vis_thre=vis_score_thre, scale=4)
+    if gt_trans_annos is not None:
+        image_gp = vis_cam(image_gp.copy(), gt_trans_annos, color=(0, 255, 0), vis_thre=-1, scale=4)
     cv2.imwrite('test.png', image_up)
     cv2.imwrite('test_g.png', image_gp)
     
@@ -146,7 +176,7 @@ def polygon2xywh(bbox):
     y_max = max(bbox[1])
     return [x_min, y_min, x_max-x_min, y_max-y_min]
 
-def ImgAnnoCoordTrans(annos, tranlation, rotation, mode='L2G'):
+def ImgAnnoCoordTrans(annos, tranlation, rotation, mode='L2G', with_rotat=False, sensor_type='BOTTOM'):
     trans_annos_bbox = copy.deepcopy(annos)
     trans_annos_polygon = copy.deepcopy(annos)
     for i in range(len(annos)):
@@ -155,11 +185,41 @@ def ImgAnnoCoordTrans(annos, tranlation, rotation, mode='L2G'):
             polygon = xywh2polygon(bbox)    # [2, 4]
         else:
             polygon = bbox
-        trans_polygon = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode)
+        trans_polygon = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode, with_rotat, sensor_type)
         trans_annos_polygon[i]['bbox'] = trans_polygon
         trans_annos_bbox[i]['bbox'] = polygon2xywh(trans_polygon)
     return trans_annos_bbox, trans_annos_polygon
 
+
+def UAV2BEV(result_path, gt_path, gt_g_path, sample_path):
+    res_annos_all = json.load(open(result_path))
+    gt_annos_all = json.load(open(gt_path))['annotations']
+    gt_g_annos_all = json.load(open(gt_g_path))['annotations']
+    coco_ = coco.COCO(gt_path)
+    catIds = coco_.getCatIds()
+    imgIds = coco_.getImgIds()
+    samples = pkl.load(open(sample_path, 'rb'))['samples']
+
+    res_annos_all_BEV = []
+    for sample_id, sample in tqdm(enumerate(samples)):
+        BEV_polygon = []
+        for k, sensor in sample.items():
+            if k.startswith('vehicles'):
+                continue
+            else:
+                if sensor['image_id'] in imgIds:
+                    res_annos = [anno.copy() for anno in res_annos_all if anno['image_id'] == sensor['image_id']]
+                    gt_annos = [anno.copy() for anno in gt_annos_all if anno['image_id'] == sensor['image_id']]
+                    gt_trans_annos = [anno.copy() for anno in gt_g_annos_all if anno['image_id'] == sensor['image_id']]
+                    res_annos_BEV_bbox, res_annos_BEV_polygon = ImgAnnoCoordTrans(res_annos.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=with_rotat, sensor_type=sensor['image'].split('/')[1].split('_')[1])
+                    test_coord(sensor, coco_, res_annos, res_annos_BEV_bbox, gt_annos, gt_trans_annos, vis_score_thre=0.3)
+                    # test_coord(sensor, coco_, res_annos, gt_annos, vis_score_thre=-1)
+                    res_annos_all_BEV.extend(res_annos_BEV_bbox)
+                    BEV_polygon.extend(res_annos_BEV_polygon)
+            import ipdb; ipdb.set_trace()
+    with open(os.path.join(os.path.dirname(result_path), 'results_BEV.json'), 'w') as f:
+        json.dump(res_annos_all_BEV, f)
+    return res_annos_all_BEV
 
 def LateFuse(result_path, gt_path, sample_path):
     res_annos_all = json.load(open(result_path))
@@ -178,7 +238,7 @@ def LateFuse(result_path, gt_path, sample_path):
             else:
                 if sensor['image_id'] in imgIds:
                     res_annos = [anno.copy() for anno in res_annos_all if anno['image_id'] == sensor['image_id']]
-                    res_annos_BEV_bbox, res_annos_BEV_polygon = ImgAnnoCoordTrans(res_annos.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
+                    res_annos_BEV_bbox, res_annos_BEV_polygon = ImgAnnoCoordTrans(res_annos.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=with_rotat, sensor_type=sensor['image'].split('/')[1].split('_')[1])
                     # test_coord(sensor, coco_, res_annos, res_annos_BEV_bbox, vis_score_thre=0.3)
                     res_annos_all_BEV.extend(res_annos_BEV_bbox)
                     BEV_polygon.extend(res_annos_BEV_polygon)
@@ -189,12 +249,11 @@ def LateFuse(result_path, gt_path, sample_path):
             else:
                 if sensor['image_id'] in imgIds:
                     res_annos = [anno.copy() for anno in res_annos_all if anno['image_id'] == sensor['image_id']]
-                    UAV_bbox, _ = ImgAnnoCoordTrans(BEV_polygon.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L')
+                    UAV_bbox, _ = ImgAnnoCoordTrans(BEV_polygon.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L', with_rotat=with_rotat, sensor_type=sensor['image'].split('/')[1].split('_')[1])
                     UAV_bbox = [x for x in UAV_bbox if x['bbox'][0] >= 0 and x['bbox'][1] >= 0 and (x['bbox'][0]+x['bbox'][2] < img_w) and (x['bbox'][1]+x['bbox'][3]) < img_h]
                     res_annos = [x for x in res_annos if x['bbox'][0] >= 0 and x['bbox'][1] >= 0 and (x['bbox'][0]+x['bbox'][2] < img_w) and (x['bbox'][1]+x['bbox'][3]) < img_h]
                     res = res_annos + UAV_bbox
-                    res = res_annos
-                    # print('res: ',  len(res))
+                    print('res: ',  len(res))
                     if len(res) <= 1:
                         print(sensor['image_id'])
                         res_annos_all_UAV_LateFused.extend(res)
@@ -259,20 +318,6 @@ def diff_Fuse(gt_g_path, result_path):
 
     import ipdb; ipdb.set_trace()
     
-def oneclass(json_path):
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-    
-    if isinstance(data, list):
-        for x in data:
-            x['category_id'] = 1
-    else:
-        for x in data['annotations']:
-            x['category_id'] = 1
-    
-    with open(os.path.join(os.path.dirname(json_path), os.path.basename(json_path).split('.')[0]+'_oneclass.json'), 'w') as f:
-        json.dump(data, f)
-    return
 
 def run_eval(result_path, gt_path, gt_g_path):
     # Single-Agent Det in UAV Coord
@@ -287,47 +332,51 @@ def run_eval(result_path, gt_path, gt_g_path):
     print('##########################################################')
 
     # Single-Agent Det in BEV Coord
-    # print('############### Single-Agent Det in BEV Coord ############')
-    # coco_g_ = coco.COCO(gt_g_path)
-    # coco_dets = coco_g_.loadRes(os.path.join(os.path.dirname(result_path), 'results_BEV.json'))
-    # coco_eval = COCOeval(coco_g_, coco_dets, "bbox")
-    # coco_eval.evaluate()
-    # coco_eval.accumulate()
-    # coco_eval.summarize()
-    # print('##########################################################')
-
-    # Single-Agent Det in BEV Coord
-    print('############### Multi-Agent Det in UAV Coord ############')
-    # coco_ = coco.COCO(gt_path)
-    print('multi-agent path: ', os.path.join(os.path.dirname(result_path), 'results_LateFused.json'))
-    coco_dets = coco_.loadRes(os.path.join(os.path.dirname(result_path), 'results_LateFused.json'))
-    coco_eval = COCOeval(coco_, coco_dets, "bbox")
+    print('###### Single-Agent Det in BEV Coord from UAV Coord ######')
+    coco_g_ = coco.COCO(gt_g_path)
+    coco_dets = coco_g_.loadRes(os.path.join(os.path.dirname(result_path), 'results_BEV.json'))
+    coco_eval = COCOeval(coco_g_, coco_dets, "bbox")
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
     print('##########################################################')
 
+    # Single-Agent Det in BEV Coord
+    print('############### Single-Agent Det in BEV Coord ############')
+    coco_g_ = coco.COCO(gt_g_path)
+    coco_dets = coco_g_.loadRes(os.path.join(os.path.dirname(result_path), 'results_Global.json'))
+    coco_eval = COCOeval(coco_g_, coco_dets, "bbox")
+    coco_eval.evaluate()
+    coco_eval.accumulate()
+    coco_eval.summarize()
+    print('##########################################################')
+
+    # Single-Agent Det in BEV Coord
+    # print('############### Multi-Agent Det in UAV Coord ############')
+    # # coco_ = coco.COCO(gt_path)
+    # print('multi-agent path: ', os.path.join(os.path.dirname(result_path), 'results_LateFused.json'))
+    # coco_dets = coco_.loadRes(os.path.join(os.path.dirname(result_path), 'results_LateFused.json'))
+    # coco_eval = COCOeval(coco_, coco_dets, "bbox")
+    # coco_eval.evaluate()
+    # coco_eval.accumulate()
+    # coco_eval.summarize()
+    # print('##########################################################')
+
 
 if __name__ == '__main__':
     # data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
-    data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
+    # data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15/'
+    data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
 
-    gt_path = os.path.join(data_dir, 'multiagent_annotations/val_instances.json')
-    gt_g_path = os.path.join(data_dir, 'multiagent_annotations/val_instances_global.json')
-    sample_path = os.path.join(data_dir, 'multiagent_annotations/val_instances_sample.pkl')
+    gt_path = os.path.join(data_dir, 'multiagent_annotations/{}_val_instances.json'.format(40))
+    gt_g_path = os.path.join(data_dir, 'multiagent_annotations/{}_val_instances_global_crop.json'.format(40))
+    sample_path = os.path.join(data_dir, 'multiagent_annotations/{}_val_instances_sample.pkl'.format(40))
     
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_nowarp_NO_MESSAGE/results.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_JointUAVBEVGT_40m_Town5_Baseline_MapScale1_B23/results_Local.json')
     result_LateFused_path = os.path.join(os.path.dirname(result_path), 'results_LateFused.json')
 
-    _, _ = LateFuse(result_path, gt_path, sample_path)
+    # _, _ = LateFuse(result_path, gt_path, sample_path)
+    UAV2BEV(result_path, gt_path, gt_g_path, sample_path)
     run_eval(result_path, gt_path, gt_g_path)
     # diff_Fuse(gt_g_path, result_path)
 
-    # One class
-    # oneclass(result_LateFused_path)
-    # oneclass(result_path)
-    # oneclass(gt_path)
-    # result_path_oneclass = os.path.join(os.path.dirname(result_path), os.path.basename(result_path).split('.')[0]+'_oneclass.json')
-    # gt_path_oneclass = os.path.join(os.path.dirname(gt_path), os.path.basename(gt_path).split('.')[0]+'_oneclass.json')
-    # result_LateFused_path_oneclass = os.path.join(os.path.dirname(result_LateFused_path), os.path.basename(result_LateFused_path).split('.')[0]+'_oneclass.json')
-    # run_eval(result_path_oneclass, gt_path_oneclass, gt_g_path)

@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import math
+from kornia.geometry.transform.imgwarp import warp_affine
 
 import torch
 from torch import nn
@@ -170,6 +171,69 @@ class DCN(DCNv2):
             self.deformable_groups,
         )
 
+class CF_DCN(DCNv2):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        dilation=1,
+        deformable_groups=1,
+    ):
+        super(CF_DCN, self).__init__(in_channels+2, out_channels, kernel_size, stride, padding, dilation, deformable_groups)
+        channels_ = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
+        self.conv_offset_mask = nn.Conv2d(
+            self.in_channels,
+            channels_,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
+            bias=True,
+        )
+        self.init_offset()
+
+    def init_offset(self):
+        self.conv_offset_mask.weight.data.zero_()
+        self.conv_offset_mask.bias.data.zero_()
+
+    def forward(self, input):
+        b, c, h, w = input.shape
+        h_i = torch.arange(h).unsqueeze(-1).expand(-1,w).unsqueeze(0) / h
+        w_i = torch.arange(w).unsqueeze(0).expand(h,-1).unsqueeze(0) / w - 0.5
+        # h_i = torch.arange(h).unsqueeze(-1).expand(-1,w).unsqueeze(0)
+        # w_i = torch.arange(w).unsqueeze(0).expand(h,-1).unsqueeze(0)
+        im_i = torch.cat([h_i, w_i], dim=0).to(input.device) # (2, h, w)
+        input_with_index = torch.cat([input, im_i.unsqueeze(0).expand(b,-1,-1,-1)], dim=1)  # (b, c+2, h, w)
+        # import ipdb; ipdb.set_trace()
+        out = self.conv_offset_mask(input_with_index)  # (b, c, h, w)
+        o1, o2, mask = torch.chunk(out, 3, dim=1)
+        offset = torch.cat((o1, o2), dim=1)
+        mask = torch.sigmoid(mask)
+        b, N, h, w = offset.shape
+        n = N // 2
+        k = int(math.sqrt(n))
+        kh_i = torch.arange(-int(k//2), int(k//2)+1).unsqueeze(-1).expand(-1,k).reshape(1,n)
+        kw_i = torch.arange(-int(k//2), int(k//2)+1).unsqueeze(0).expand(k,-1).reshape(1,n)
+        k_i = torch.cat([kh_i, kw_i], dim=0)    # (2, 25)
+        k_i = k_i.unsqueeze(-1).expand(-1, -1, h).unsqueeze(-1).expand(-1, -1, -1, w)  # (2, 25, h, w)
+        im_i = im_i.unsqueeze(1).expand(-1, n, -1, -1)  # (2, 25, h, w)
+        index_i = im_i + k_i.to(offset.device)
+        index_i = index_i.reshape(N, h, w).unsqueeze(0).expand(b, -1, -1, -1) # (b, 50, h, w) or (b, 18, h, w)
+        # import ipdb; ipdb.set_trace()
+        index_i = index_i + offset
+        return dcn_v2_conv(
+            input_with_index,
+            offset,
+            mask,
+            self.weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.deformable_groups,
+        ), index_i, mask
 
 class _DCNv2Pooling(Function):
     @staticmethod

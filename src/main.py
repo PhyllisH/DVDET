@@ -30,7 +30,7 @@ def main(opt):
 
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
-    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord)
+    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode)
     optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
     if opt.load_model != '':
@@ -89,13 +89,14 @@ def main(opt):
             save_model(os.path.join(opt.save_dir, 'model_last.pth'),
                        epoch, model, optimizer)
         logger.write('\n')
-        if epoch in opt.lr_step:
+        if (epoch in opt.lr_step) or (epoch%20==0):
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
-            lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
-            print('Drop LR to', lr)
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+            if epoch in opt.lr_step:
+                lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
+                print('Drop LR to', lr)
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = lr
     logger.close()
 
 
