@@ -17,7 +17,7 @@ class ModelWithLoss(torch.nn.Module):
         self.map_scale = map_scale
 
     def forward(self, batch):
-        outputs = self.model(batch['input'], [batch['trans_mats'], batch['trans_mats_05'], batch['trans_mats_10'], batch['trans_mats_15']], \
+        outputs = self.model(batch['input'], [batch['trans_mats'], batch['trans_mats_n005'], batch['trans_mats_n010'], batch['trans_mats_p005'], batch['trans_mats_p007'], batch['trans_mats_p010'], batch['trans_mats_p015'], batch['trans_mats_p020'], batch['trans_mats_p080']], \
                              [batch['shift_mats_1'], batch['shift_mats_2'], batch['shift_mats_4'], batch['shift_mats_8']], self.map_scale)
         loss, loss_stats = self.loss(outputs, batch)
         return outputs[-1], loss, loss_stats

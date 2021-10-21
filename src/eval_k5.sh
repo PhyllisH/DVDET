@@ -38,9 +38,12 @@ epoch=('20' '40' '60' '80' '90' '100' '120' '140' '160' '180' '200' 'best')
 # exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_CFDCN_Bilinear_K5_HWAndNearestResidual_WeightedDepth_Revised'
 # exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_SaliencySampler_InputWithIndex_WeightedDepth_Revised'
 # exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_CFDCN_Bilinear_K5_HWAndNearestResidual_WeightedDepth_Revised_AvgThenCFDCN'
-exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_CFDCN_Bilinear_K5_HWAndNearestResidual_NormalizedHW_WeightedDepth_AvgThenCFDCN'
-
-
+# exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_CFDCN_Bilinear_K5_HWAndNearestResidual_NormalizedHW_WeightedDepth_AvgThenCFDCN'
+# exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_WarpImage'
+# exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_WeightedDepth_DepthGapFromTrainSet_Repeat'
+# exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_WeightedDepth_DepthGapFromTrainSet_DepthWithSupervision_MeanZ'
+# exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_WeightedDepth_DepthGapFromTrainSet_DepthWithSupervision_MaxZ'
+exp_id='dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1_msra02_WarpImage_Depth05'
 
 for i in ${epoch[*]}
 do
@@ -48,8 +51,9 @@ do
     CUDA_VISIBLE_DEVICES=$gpu_id python multiagent_test.py multiagent_det \
         --exp_id $exp_id \
         --load_model '../exp/multiagent_det/'$exp_id'/model_'$i'.pth' \
-        --gpus $gpu_id --coord=Global  --trans_layer -2 --down_ratio=1 \
+        --gpus $gpu_id --coord=Global  --trans_layer -1 --down_ratio=1 \
         --message_mode=NO_MESSAGE --uav_height=40 \
         --input_dir '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15' \
-        --map_scale=1.0 --warp_mode=DW --depth_mode=Weighted
+        --map_scale=1.0 \
+        # --warp_mode=HW --depth_mode=Weighted
 done

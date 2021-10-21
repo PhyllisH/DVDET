@@ -878,10 +878,10 @@ class DLASeg(nn.Module):
         elif self.warp_mode == 'SWU':
             self.saliency0 = Saliency_Sampler(448, 800, 64)
         if self.depth_mode == 'Weighted':
-            self.conv0 = nn.Conv2d(64, 4, kernel_size=1, stride=1, padding=0)
-            self.conv1 = nn.Conv2d(128, 4, kernel_size=1, stride=1, padding=0)
-            self.conv2 = nn.Conv2d(256, 4, kernel_size=1, stride=1, padding=0)
-            self.conv3 = nn.Conv2d(512, 4, kernel_size=1, stride=1, padding=0)
+            self.conv0 = nn.Conv2d(64, 9, kernel_size=1, stride=1, padding=0)
+            self.conv1 = nn.Conv2d(128, 9, kernel_size=1, stride=1, padding=0)
+            self.conv2 = nn.Conv2d(256, 9, kernel_size=1, stride=1, padding=0)
+            self.conv3 = nn.Conv2d(512, 9, kernel_size=1, stride=1, padding=0)
     
     def NO_MESSAGE_NOWARP(self, images):
         b, num_agents, img_c, img_h, img_w = images.size()
@@ -1269,6 +1269,7 @@ class DLASeg(nn.Module):
             if self.depth_mode == 'Weighted':
                 # get depth weights
                 depth_weighted_feat_maps = [[] for _ in range(len(trans_mats))]
+                depth_weights_list = []
                 for c_layer, feat_map in enumerate(x):
                     depth_weights = eval('self.conv'+str(c_layer))(feat_map)    # (B, D, h, w)
                     depth_weights = F.softmax(depth_weights, dim=1)
@@ -1276,10 +1277,12 @@ class DLASeg(nn.Module):
                     depth_weighted_feat_map = depth_weighted_feat_map.unbind(1)
                     for depth_layer in range(len(trans_mats)):
                         depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
+                    depth_weights_list.append(depth_weights)
             else:
                 trans_mats = [trans_mats[3]]
                 depth_weighted_feat_maps = [x]
 
+            global_depth_weights_list = []
             for depth_layer, init_trans_mats in enumerate(trans_mats):
                 cur_x = depth_weighted_feat_maps[depth_layer]
                 global_x = []
@@ -1403,8 +1406,14 @@ class DLASeg(nn.Module):
                         # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
                         # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
                         # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
+
+                        if len(global_depth_weights_list) >= 4:
+                            pass
+                        else:
+                            global_depth_weights = kornia.warp_perspective(depth_weights_list[c_layer], cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
                     
                     global_x.append(global_feat)
+                    global_depth_weights_list.append(global_depth_weights)
                     
                     # val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
                     # for j in range(min(5, val_mats.shape[0])):
@@ -1466,36 +1475,35 @@ class DLASeg(nn.Module):
             # z[head] = kornia.warp_perspective(global_z[head], trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
         # return [z]
 
-        import ipdb; ipdb.set_trace()
-        index = torch.where(global_z['hm'].sigmoid()>0.3)
-        index = torch.cat([x.unsqueeze(-1) for x in index], dim=-1)
-        N_objs = index.shape[0]
-        ax_i = int(math.sqrt(N_objs))
-        ax_j = math.ceil(N_objs/ax_i)
-        # Find the most objectiveness areas
-        for layer_i, (warp_images, offset, mask) in enumerate(zip(warp_images_list, offset_list, mask_list)):
-            b, N, h, w = offset.shape
-            offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
-            # fig, axes = plt.subplots(ax_i, ax_j)
-            for index_i in range(index.shape[0]):
-                fig = plt.figure()
-                i, j = index_i//ax_j, index_i%ax_j
-                h_i, w_j = index[index_i][-2:]
-                h_i = int(h_i * h / 192)
-                w_j = int(w_j * w / 352)
-                plt.plot(w_j, h_i, 'bo')
-                plt.plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
-                plt.imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
-                plt.xticks([])
-                plt.yticks([])
-                # axes[i,j].plot(w_j, h_i, 'bo')
-                # axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
-                # axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
-                # axes[i,j].set_xticks([])
-                # axes[i,j].set_yticks([])
-                plt.savefig('offset/{}_{}.png'.format(index_i, layer_i))
-                plt.close()
-            
+        # index = torch.where(global_z['hm'].sigmoid()>0.3)
+        # index = torch.cat([x.unsqueeze(-1) for x in index], dim=-1)
+        # N_objs = index.shape[0]
+        # ax_i = int(math.sqrt(N_objs))
+        # ax_j = math.ceil(N_objs/ax_i)
+        # # Find the most objectiveness areas
+        # for layer_i, (warp_images, offset, mask) in enumerate(zip(warp_images_list, offset_list, mask_list)):
+        #     b, N, h, w = offset.shape
+        #     offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
+        #     # fig, axes = plt.subplots(ax_i, ax_j)
+        #     for index_i in range(index.shape[0]):
+        #         fig = plt.figure()
+        #         i, j = index_i//ax_j, index_i%ax_j
+        #         h_i, w_j = index[index_i][-2:]
+        #         h_i = int(h_i * h / 192)
+        #         w_j = int(w_j * w / 352)
+        #         plt.plot(w_j, h_i, 'bo')
+        #         plt.plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+        #         plt.imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+        #         plt.xticks([])
+        #         plt.yticks([])
+        #         # axes[i,j].plot(w_j, h_i, 'bo')
+        #         # axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+        #         # axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+        #         # axes[i,j].set_xticks([])
+        #         # axes[i,j].set_yticks([])
+        #         plt.savefig('offset/{}_{}.png'.format(index_i, layer_i))
+        #         plt.close()
+        global_z['z'] = global_depth_weights_list[0]
         return [global_z]
     
     def JointCoord_forward(self, images, trans_mats, shift_mats, map_scale):

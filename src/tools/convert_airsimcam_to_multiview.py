@@ -279,8 +279,13 @@ def convert_multiview_coco(town_id=1, height=40):
                         cur_UAV_sample['trans_mat'] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                       calibrated_record["rotation"].copy(),
                                                       camera_intrinsic) @ worldgrid2worldcoord_mat
-                        for z0 in [0.5, 1.0, 1.5]:
-                            cur_UAV_sample['trans_mat_{:02d}'.format(int(z0*10))] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
+                        # for z0 in [0.5, 1.0, 1.5]:
+                        for z0 in [-1.0, -0.5, 0.5, 0.75, 1.0, 1.5, 2.0, 8.0]:
+                            if z0 < 0:
+                                z_key = 'trans_mat_n{:03d}'.format(int((-1)*z0*10))
+                            else:
+                                z_key = 'trans_mat_p{:03d}'.format(int(z0*10))
+                            cur_UAV_sample[z_key] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                         calibrated_record["rotation"].copy(),
                                                         camera_intrinsic, z0=z0) @ worldgrid2worldcoord_mat
                         im_position = calibrated_record["translation"].copy()
@@ -342,6 +347,7 @@ def convert_multiview_coco(town_id=1, height=40):
                         vehicles_i = []
                         vehicles_g = []
                         vehicles_g_corners = []
+                        vehicles_z = []
                         category_id = []
                         seg_img = cv2.imread(os.path.join(data_dir, os.path.dirname(sensor_record['filename']), os.path.basename(sensor_record['filename']).split('.')[0]+'_seg.png'))
                         for vehicle_cord in vehicle_cords:
@@ -379,6 +385,7 @@ def convert_multiview_coco(town_id=1, height=40):
 
                             # vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=image_W/world_X, scale_h=image_H/world_Y, world_X_left=world_X_left, world_Y_left=world_Y_left)
                             vehicle_grid = WorldCoord2WorldGrid(vehicle_cord[:3, :], scale_w=1, scale_h=1, world_X_left=world_X_left, world_Y_left=world_Y_left)
+                            vehicle_z = [vehicle_cord[2].min(), vehicle_cord[2].max()]
                             x, y, w, h = get_2d_bounding_box(vehicle_grid[:3])
                             polygon_xywhcs, corners = get_angle_polygon(deepcopy(vehicle_grid[:2,:4]))
                             # print(corners)
@@ -400,6 +407,7 @@ def convert_multiview_coco(town_id=1, height=40):
                             if not ignore:
                                 vehicles_g.append([x, y, w, h])
                                 vehicles_g_corners.append(corners)
+                                vehicles_z.append(vehicle_z)
 
                             vehicle_grid_crop = get_shift_coord(vehicle_grid.copy(), shift_mats[1])
                             x_crop, y_crop, w_crop, h_crop = get_2d_bounding_box(vehicle_grid_crop[:3])
@@ -419,6 +427,7 @@ def convert_multiview_coco(town_id=1, height=40):
                         cur_UAV_sample['vehicles_i'] = np.array(vehicles_i)
                         cur_UAV_sample['vehicles_g'] = np.array(vehicles_g)
                         cur_UAV_sample['vehicles_g_corners'] = np.array(vehicles_g_corners)
+                        cur_UAV_sample['vehicles_z'] = np.array(vehicles_z)
                         cur_UAV_sample['category_id'] = np.array(category_id)
                         cur_sample_info['{}_{}'.format(UAV_cam, UAV_id)] = cur_UAV_sample
                 ret_s['samples'].append(cur_sample_info)

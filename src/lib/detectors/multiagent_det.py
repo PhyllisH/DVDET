@@ -240,8 +240,11 @@ class MultiAgentDetector(BaseDetector):
                     meta = updated_meta
                 else:
                     meta = {k: v.numpy()[0] for k, v in meta.items()}
-                trans_mats = [pre_processed_images['trans_mats'], pre_processed_images['trans_mats_05'], \
-                                pre_processed_images['trans_mats_10'], pre_processed_images['trans_mats_15']]
+                trans_mats = [pre_processed_images['trans_mats'], pre_processed_images['trans_mats_n010'], \
+                                pre_processed_images['trans_mats_n005'], pre_processed_images['trans_mats_p005'],\
+                                pre_processed_images['trans_mats_p007'], pre_processed_images['trans_mats_p010'],\
+                                pre_processed_images['trans_mats_p015'], pre_processed_images['trans_mats_p020'],\
+                                pre_processed_images['trans_mats_p080']]
                 shift_mats = [pre_processed_images['shift_mats_1'], pre_processed_images['shift_mats_2'], \
                                 pre_processed_images['shift_mats_4'], pre_processed_images['shift_mats_8']]
             images = images.to(self.opt.device)

@@ -108,14 +108,20 @@ class PrefetchDataset(torch.utils.data.Dataset):
         images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
         image_idx.append(info['image_id'])
         trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]
-        trans_mats_05 = np.array(info['trans_mat_05'], dtype=np.float32)[None,:,:]
-        trans_mats_10 = np.array(info['trans_mat_10'], dtype=np.float32)[None,:,:]
-        trans_mats_15 = np.array(info['trans_mat_15'], dtype=np.float32)[None,:,:]
+        trans_mats_n010 = np.array(info['trans_mat_n010'], dtype=np.float32)[None,:,:]
+        trans_mats_n005 = np.array(info['trans_mat_n005'], dtype=np.float32)[None,:,:]
+        trans_mats_p005 = np.array(info['trans_mat_p005'], dtype=np.float32)[None,:,:]
+        trans_mats_p007 = np.array(info['trans_mat_p007'], dtype=np.float32)[None,:,:]
+        trans_mats_p010 = np.array(info['trans_mat_p010'], dtype=np.float32)[None,:,:]
+        trans_mats_p015 = np.array(info['trans_mat_p015'], dtype=np.float32)[None,:,:]
+        trans_mats_p020 = np.array(info['trans_mat_p020'], dtype=np.float32)[None,:,:]
+        trans_mats_p080 = np.array(info['trans_mat_p080'], dtype=np.float32)[None,:,:]
         shift_mats_1 = np.array(info['shift_mats'][1*self.opt.map_scale], dtype=np.float32)[None,:,:]
         shift_mats_2 = np.array(info['shift_mats'][2*self.opt.map_scale], dtype=np.float32)[None,:,:]
         shift_mats_4 = np.array(info['shift_mats'][4*self.opt.map_scale], dtype=np.float32)[None,:,:]
         shift_mats_8 = np.array(info['shift_mats'][8*self.opt.map_scale], dtype=np.float32)[None,:,:]
-        return images, image_idx, [trans_mats, trans_mats_05, trans_mats_10, trans_mats_15] , [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
+        return images, image_idx, [trans_mats, trans_mats_n010, trans_mats_n005, trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080],\
+                     [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
 
     def __getitem__(self, index):
         if 'NO_MESSAGE' in self.opt.message_mode:
@@ -132,7 +138,9 @@ class PrefetchDataset(torch.utils.data.Dataset):
             scaled_images[scale] = np.concatenate(cur_images, axis=0)
             meta[scale] = cur_meta
         return image_idx, {'images': scaled_images, 'image': images, 'meta': meta, \
-                            'trans_mats': trans_mats[0], 'trans_mats_05': trans_mats[1], 'trans_mats_10': trans_mats[2], 'trans_mats_15': trans_mats[3],\
+                            'trans_mats': trans_mats[0], 'trans_mats_n010': trans_mats[1], 'trans_mats_n005': trans_mats[2], 'trans_mats_p005': trans_mats[3],\
+                            'trans_mats_p007': trans_mats[4], 'trans_mats_p010': trans_mats[5], 'trans_mats_p015': trans_mats[6], 'trans_mats_p020': trans_mats[7],\
+                            'trans_mats_p080': trans_mats[8], \
                             'shift_mats_1': shift_mats[0], 'shift_mats_2': shift_mats[1], 'shift_mats_4': shift_mats[2], 'shift_mats_8': shift_mats[3]}
 
     def __len__(self):

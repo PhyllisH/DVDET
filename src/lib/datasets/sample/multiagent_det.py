@@ -25,6 +25,7 @@ from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
 from utils.image import draw_dense_reg
 import math
 import kornia
+import copy
 
 
 class MultiAgentDetDataset(data.Dataset):
@@ -141,6 +142,29 @@ class MultiAgentDetDataset(data.Dataset):
         trans_output = get_affine_transform(c, s, 0, [output_w, output_h])
         
         return c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w
+    
+    def _get_depth_cls(self, obj_z, depth_list, mode='mean'):
+        '''
+        Function:
+            Get the nearest depth category of the object
+        Inputs:
+            obj_z: Tuple(min_z, max_z)
+            depth_list: Array
+            mode: 'mean', 'min', or 'max'
+        Outputs:
+            category: scalar
+        '''
+        if mode == 'mean':
+            cur_z = (obj_z[0] + obj_z[1]) * 0.5
+        elif mode == 'min':
+            cur_z = obj_z[0]
+        else:
+            cur_z = obj_z[1]
+        
+        depth_diff = copy.deepcopy(depth_list) - cur_z
+        depth_diff = np.abs(depth_diff)
+        index = depth_diff.argmin()
+        return index
 
     def load_sample(self, sample, img_dir, num_images=8):
         ##############################################################
@@ -152,29 +176,42 @@ class MultiAgentDetDataset(data.Dataset):
         images = []
         vehicles = []
         vehicles_i = []
+        vehicles_z = []
         category_idx = []
         trans_mats_list = []
-        trans_mats_list_05 = []
-        trans_mats_list_10 = []
-        trans_mats_list_15 = []
+        trans_mats_list_n010 = []
+        trans_mats_list_n005 = []
+        trans_mats_list_p005 = []
+        trans_mats_list_p007 = []
+        trans_mats_list_p010 = []
+        trans_mats_list_p015 = []
+        trans_mats_list_p020 = []
+        trans_mats_list_p080 = []
         shift_mats_list_1 = []
         shift_mats_list_2 = []
         shift_mats_list_4 = []
         shift_mats_list_8 = []
         scale = self.opt.map_scale
+        depth_list = np.array([0, -1.0, -0.5, 0.5, 0.75, 1.0, 1.5, 2.0, 8.0])
         if num_images == 1:
             images.append(cv2.imread(os.path.join(img_dir, sample[images_key])))
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
             trans_mats_list.append(sample['trans_mat'])
-            trans_mats_list_05.append(sample['trans_mat_05'])
-            trans_mats_list_10.append(sample['trans_mat_10'])
-            trans_mats_list_15.append(sample['trans_mat_15'])
+            trans_mats_list_n010.append(sample['trans_mat_n010'])
+            trans_mats_list_n005.append(sample['trans_mat_n005'])
+            trans_mats_list_p005.append(sample['trans_mat_p005'])
+            trans_mats_list_p007.append(sample['trans_mat_p007'])
+            trans_mats_list_p010.append(sample['trans_mat_p010'])
+            trans_mats_list_p015.append(sample['trans_mat_p015'])
+            trans_mats_list_p020.append(sample['trans_mat_p020'])
+            trans_mats_list_p080.append(sample['trans_mat_p080'])
             vehicles_i.append(sample['vehicles_i'])
             shift_mats_list_1.append(sample['shift_mats'][1*scale])
             shift_mats_list_2.append(sample['shift_mats'][2*scale])
             shift_mats_list_4.append(sample['shift_mats'][4*scale])
             shift_mats_list_8.append(sample['shift_mats'][8*scale])
+            vehicles_z.append(sample['vehicles_z'])
         else:
             # cam_id = np.random.randint(low=0, high=5)
             # cam_list = random.sample(set([x for x in sample.keys() if not x.startswith('vehicles')]), random.randint(2, num_images))
@@ -193,18 +230,29 @@ class MultiAgentDetDataset(data.Dataset):
                     vehicles.append(info[vehicles_key])
                     category_idx.append(info['category_id'])
                     trans_mats_list.append(info['trans_mat'])
-                    trans_mats_list_05.append(info['trans_mat_05'])
-                    trans_mats_list_10.append(info['trans_mat_10'])
-                    trans_mats_list_15.append(info['trans_mat_15'])
+                    trans_mats_list_n010.append(info['trans_mat_n010'])
+                    trans_mats_list_n005.append(info['trans_mat_n005'])
+                    trans_mats_list_p005.append(info['trans_mat_p005'])
+                    trans_mats_list_p007.append(info['trans_mat_p007'])
+                    trans_mats_list_p010.append(info['trans_mat_p010'])
+                    trans_mats_list_p015.append(info['trans_mat_p015'])
+                    trans_mats_list_p020.append(info['trans_mat_p020'])
+                    trans_mats_list_p080.append(info['trans_mat_p080'])
                     vehicles_i.append(info['vehicles_i'])
                     shift_mats_list_1.append(info['shift_mats'][1*scale])
                     shift_mats_list_2.append(info['shift_mats'][2*scale])
                     shift_mats_list_4.append(info['shift_mats'][4*scale])
                     shift_mats_list_8.append(info['shift_mats'][8*scale])
+                    vehicles_z.append(info['vehicles_z'])
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
-        trans_mats_list_05 = np.concatenate([x[None,:,:] for x in trans_mats_list_05], axis=0)
-        trans_mats_list_10 = np.concatenate([x[None,:,:] for x in trans_mats_list_10], axis=0)
-        trans_mats_list_15 = np.concatenate([x[None,:,:] for x in trans_mats_list_15], axis=0)
+        trans_mats_list_n010 = np.concatenate([x[None,:,:] for x in trans_mats_list_n010], axis=0)
+        trans_mats_list_n005 = np.concatenate([x[None,:,:] for x in trans_mats_list_n005], axis=0)
+        trans_mats_list_p005 = np.concatenate([x[None,:,:] for x in trans_mats_list_p005], axis=0)
+        trans_mats_list_p007 = np.concatenate([x[None,:,:] for x in trans_mats_list_p007], axis=0)
+        trans_mats_list_p010 = np.concatenate([x[None,:,:] for x in trans_mats_list_p010], axis=0)
+        trans_mats_list_p015 = np.concatenate([x[None,:,:] for x in trans_mats_list_p015], axis=0)
+        trans_mats_list_p020 = np.concatenate([x[None,:,:] for x in trans_mats_list_p020], axis=0)
+        trans_mats_list_p080 = np.concatenate([x[None,:,:] for x in trans_mats_list_p080], axis=0)
         shift_mats_list_1 = np.concatenate([x[None,:,:] for x in shift_mats_list_1], axis=0)
         shift_mats_list_2 = np.concatenate([x[None,:,:] for x in shift_mats_list_2], axis=0)
         shift_mats_list_4 = np.concatenate([x[None,:,:] for x in shift_mats_list_4], axis=0)
@@ -234,29 +282,42 @@ class MultiAgentDetDataset(data.Dataset):
         cat_spec_wh = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.float32)
         cat_spec_mask = np.zeros((num_images, self.max_objs, num_classes * 2), dtype=np.uint8)
         aug_imgs = np.zeros((num_images, 3, input_h, input_w), dtype=np.float32)
+
+        cat_depth = np.zeros((num_images, self.max_objs, len(depth_list)), dtype=np.float32)
+        depth_mat = np.eye(len(depth_list), dtype=np.uint8)
         
         # ----------- TransMat ------------- #
         trans_mats = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        trans_mats_05 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        trans_mats_10 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
-        trans_mats_15 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_n010 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_n005 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p005 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p007 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p010 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p015 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p020 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        trans_mats_p080 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_1 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_2 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_4 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_8 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         
         trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
-        trans_mats_05[:min(num_images, len(trans_mats_list))] = trans_mats_list_05[:min(num_images, len(trans_mats_list))]
-        trans_mats_10[:min(num_images, len(trans_mats_list))] = trans_mats_list_10[:min(num_images, len(trans_mats_list))]
-        trans_mats_15[:min(num_images, len(trans_mats_list))] = trans_mats_list_15[:min(num_images, len(trans_mats_list))]
+        trans_mats_n010[:min(num_images, len(trans_mats_list))] = trans_mats_list_n010[:min(num_images, len(trans_mats_list))]
+        trans_mats_n005[:min(num_images, len(trans_mats_list))] = trans_mats_list_n005[:min(num_images, len(trans_mats_list))]
+        trans_mats_p005[:min(num_images, len(trans_mats_list))] = trans_mats_list_p005[:min(num_images, len(trans_mats_list))]
+        trans_mats_p007[:min(num_images, len(trans_mats_list))] = trans_mats_list_p007[:min(num_images, len(trans_mats_list))]
+        trans_mats_p010[:min(num_images, len(trans_mats_list))] = trans_mats_list_p010[:min(num_images, len(trans_mats_list))]
+        trans_mats_p015[:min(num_images, len(trans_mats_list))] = trans_mats_list_p015[:min(num_images, len(trans_mats_list))]
+        trans_mats_p020[:min(num_images, len(trans_mats_list))] = trans_mats_list_p020[:min(num_images, len(trans_mats_list))]
+        trans_mats_p080[:min(num_images, len(trans_mats_list))] = trans_mats_list_p080[:min(num_images, len(trans_mats_list))]
         shift_mats_1[:min(num_images, len(trans_mats_list))] = shift_mats_list_1[:min(num_images, len(shift_mats_1))]
         shift_mats_2[:min(num_images, len(trans_mats_list))] = shift_mats_list_2[:min(num_images, len(shift_mats_2))]
         shift_mats_4[:min(num_images, len(trans_mats_list))] = shift_mats_list_4[:min(num_images, len(shift_mats_4))]
         shift_mats_8[:min(num_images, len(trans_mats_list))] = shift_mats_list_8[:min(num_images, len(shift_mats_8))]
 
         gt_dets = []
-        for index, info in enumerate(zip(images, vehicles, vehicles_i, category_idx)):
-            img, objs, objs_i, category_ids = info
+        for index, info in enumerate(zip(images, vehicles, vehicles_i, vehicles_z, category_idx)):
+            img, objs, objs_i, objs_z, category_ids = info
             if flipped:
                 img = img[:, ::-1, :]
             inp = cv2.warpAffine(img, trans_input,
@@ -302,6 +363,10 @@ class MultiAgentDetDataset(data.Dataset):
                 coord_warp = get_shift_coord(coord, shift_mats_1[index]@map_mat)
                 # coord_warp = trans_output @ coord
                 # print('BEV image: ', coord_warp)
+                coord_z = objs_z[k]
+                depth_id = self._get_depth_cls(coord_z, depth_list, mode='mean')
+                cat_depth[index, k] = depth_mat[depth_id]
+
                 if self.opt.polygon:
                     bbox = self._get_polygon_gt(coord_warp[:2]) # (x,y,w,h,sin,cos)
                     gt_polygon = coord_warp[:2]
@@ -444,29 +509,42 @@ class MultiAgentDetDataset(data.Dataset):
             #     img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
             #     cv2.imwrite('ori_warp_UAV.png', img_warp)
 
-        return c, s, aug_imgs, trans_mats, trans_mats_05, trans_mats_10, trans_mats_15, shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \
+        return c, s, aug_imgs, trans_mats, trans_mats_n005, trans_mats_n010,\
+                    trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080,\
+                    shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \
                     hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_dets, \
-                    hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i
+                    hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i, \
+                    cat_depth
 
     def __getitem__(self, index):
         sample = self.samples[index]
         img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
-        c, s, aug_imgs, trans_mats, trans_mats_05, trans_mats_10, trans_mats_15, \
+        c, s, aug_imgs, trans_mats, trans_mats_n005, trans_mats_n010, \
+            trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080, \
             shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \
             hm, wh, angle, dense_wh, reg_mask, ind, cat_spec_wh, cat_spec_mask, reg, gt_det, \
-            hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i = self.load_sample(sample, img_dir, num_images=self.num_agents)
+            hm_i, wh_i, dense_wh_i, reg_mask_i, ind_i, cat_spec_wh_i, cat_spec_mask_i, reg_i, gt_dets_i, cat_depth = self.load_sample(sample, img_dir, num_images=self.num_agents)
         if self.opt.coord == 'Joint':
-            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15,\
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_n005': trans_mats_n005, 'trans_mats_n010': trans_mats_n010, 'trans_mats_p005': trans_mats_p005,\
+                    'trans_mats_p007': trans_mats_p007, 'trans_mats_p010': trans_mats_p010, 'trans_mats_p015': trans_mats_p015, 'trans_mats_p020': trans_mats_p020,\
+                    'trans_mats_p080': trans_mats_p080, \
                     'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, \
                     'hm_i': hm_i, 'reg_mask_i': reg_mask_i, 'ind_i': ind_i, 'wh_i': wh_i, \
+                    'cat_depth': cat_depth, \
                     'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
         elif self.opt.coord == 'Global':
-            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15, \
-                    'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, 
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_n005': trans_mats_n005, 'trans_mats_n010': trans_mats_n010, 'trans_mats_p005': trans_mats_p005,\
+                    'trans_mats_p007': trans_mats_p007, 'trans_mats_p010': trans_mats_p010, 'trans_mats_p015': trans_mats_p015, 'trans_mats_p020': trans_mats_p020,\
+                    'trans_mats_p080': trans_mats_p080, \
+                    'hm': hm, 'reg_mask': reg_mask, 'ind': ind, 'wh': wh, 'angle': angle, \
+                    'cat_depth': cat_depth, \
                     'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
         elif self.opt.coord == 'Local':
-            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_05': trans_mats_05, 'trans_mats_10': trans_mats_10, 'trans_mats_15': trans_mats_15, \
+            ret = {'input': aug_imgs, 'trans_mats': trans_mats, 'trans_mats_n005': trans_mats_n005, 'trans_mats_n010': trans_mats_n010, 'trans_mats_p005': trans_mats_p005,\
+                    'trans_mats_p007': trans_mats_p007, 'trans_mats_p010': trans_mats_p010, 'trans_mats_p015': trans_mats_p015, 'trans_mats_p020': trans_mats_p020,\
+                    'trans_mats_p080': trans_mats_p080, \
                     'hm': hm_i, 'reg_mask': reg_mask_i, 'ind': ind_i, 'wh': wh_i, \
+                    'cat_depth': cat_depth, \
                     'shift_mats_1': shift_mats_1, 'shift_mats_2': shift_mats_2, 'shift_mats_4': shift_mats_4, 'shift_mats_8': shift_mats_8}
         if self.opt.dense_wh:
             hm_a = hm.max(axis=1, keepdims=True)

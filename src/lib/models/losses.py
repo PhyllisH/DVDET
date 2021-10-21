@@ -129,6 +129,58 @@ class FocalLoss(nn.Module):
         return self.neg_loss(out, target)
 
 
+def _neg_loss_with_mask(pred, gt, mask):
+    ''' Modified focal loss. Exactly the same as CornerNet.
+        Runs faster and costs a little bit more memory
+      Arguments:
+        pred (batch x max_objects x dim)
+        gt_regr (batch x max_objects x dim)
+        mask (batch x max_objects)
+    '''
+    pos_inds = gt.eq(1).float()
+    neg_inds = gt.lt(1).float()
+
+    neg_weights = torch.pow(1 - gt, 4)
+
+    loss = 0
+
+    # print('mask:', mask.shape)
+    # print('pred:', pred.shape)
+    # print('gt:', gt.shape)
+
+    pos_loss = torch.log(pred+1e-6) * torch.pow(1 - pred, 2) * pos_inds * mask.unsqueeze(-1)
+    neg_loss = torch.log(1 - pred) * torch.pow(pred, 2) * neg_weights * neg_inds * mask.unsqueeze(-1)
+
+    num_pos = (pos_inds*mask.unsqueeze(-1)).float().sum()
+    pos_loss = pos_loss.sum()
+    neg_loss = neg_loss.sum()
+
+    # print('\npos: ', -pos_loss.detach().cpu().item(), num_pos.detach().cpu().item())
+    # print('neg: ', -neg_loss.detach().cpu().item(), '\n')
+
+    if num_pos == 0:
+        loss = loss - neg_loss
+    else:
+        loss = loss - (pos_loss + neg_loss) / num_pos
+    return loss
+
+class ZFocalLoss(nn.Module):
+    '''ZFocalLoss loss for an output tensor
+      Arguments:
+        output (batch x dim x h x w)
+        mask (batch x max_objects)
+        ind (batch x max_objects)
+        target (batch x max_objects x dim)
+    '''
+
+    def __init__(self):
+        super(ZFocalLoss, self).__init__()
+
+    def forward(self, output, mask, ind, target):
+        pred = _transpose_and_gather_feat(output, ind)
+        loss = _neg_loss_with_mask(pred, target, mask)
+        return loss
+
 class RegLoss(nn.Module):
     '''Regression loss for an output tensor
       Arguments:

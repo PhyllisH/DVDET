@@ -1243,7 +1243,7 @@ class DLASeg(nn.Module):
         
         if warp_image:
             # print('Warp image')
-            cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
+            cur_trans_mats = trans_mats[3].view(b*num_agents, 3, 3)
             worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
             feat_zoom_mats = torch.Tensor(np.array(np.diag([4, 4, 1]), dtype=np.float32)).to(cur_trans_mats.device)
             cur_trans_mats = feat_zoom_mats @ shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
@@ -1280,7 +1280,7 @@ class DLASeg(nn.Module):
                     for depth_layer in range(len(trans_mats)):
                         depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
             else:
-                trans_mats = [trans_mats[3]]
+                trans_mats = [trans_mats[0]]
                 depth_weighted_feat_maps = [x]
 
             for depth_layer, init_trans_mats in enumerate(trans_mats):

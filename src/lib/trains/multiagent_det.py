@@ -10,12 +10,13 @@ from __future__ import division
 from __future__ import print_function
 from math import inf
 from typing_extensions import OrderedDict
+from numpy.core.fromnumeric import put
 
 import torch
 import numpy as np
 
 from models.losses import FocalLoss
-from models.losses import RegL1Loss, RegLoss, NormRegL1Loss, RegWeightedL1Loss
+from models.losses import RegL1Loss, RegLoss, NormRegL1Loss, RegWeightedL1Loss, ZFocalLoss
 from models.decode import ctdet_decode
 from models.utils import _sigmoid
 from utils.debugger import Debugger
@@ -43,6 +44,7 @@ class CtdetLoss(torch.nn.Module):
         self.crit_wh = torch.nn.L1Loss(reduction='sum') if opt.dense_wh else \
             NormRegL1Loss() if opt.norm_wh else \
                 RegWeightedL1Loss() if opt.cat_spec_wh else self.crit_reg
+        self.crit_z = ZFocalLoss()
         self.opt = opt
 
     def forward(self, outputs, ori_batch):
@@ -50,6 +52,7 @@ class CtdetLoss(torch.nn.Module):
         batch = _reorganize_batch(ori_batch)
         hm_loss, wh_loss, off_loss, angle_loss = 0, 0, 0, 0
         hm_loss_i, wh_loss_i, off_loss_i, angle_loss_i = 0, 0, 0, 0
+        z_loss = 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
@@ -141,6 +144,10 @@ class CtdetLoss(torch.nn.Module):
                         wh_loss_i += self.crit_reg(
                             output['wh_i'], batch['reg_mask_i'],
                             batch['ind_i'], batch['wh_i']) / opt.num_stacks
+                    if 'z' in output:
+                        z_loss += self.crit_z(
+                            output['z'], batch['reg_mask'],
+                            batch['ind'], batch['cat_depth']) / opt.num_stacks
             if opt.polygon and (opt.angle_weight > 0):
                 if opt.coord in ['Global', 'Joint']:
                     angle_loss += self.crit_reg(
@@ -169,9 +176,14 @@ class CtdetLoss(torch.nn.Module):
         else:
             if opt.coord in ['Global', 'Local']:
                 loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
-                        opt.off_weight * off_loss
-                loss_stats = {'loss': loss, 'hm_loss': hm_loss,
-                        'wh_loss': wh_loss, 'off_loss': off_loss}
+                        opt.off_weight * off_loss + opt.wh_weight * z_loss
+                if 'z' in output:
+                    loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                            'wh_loss': wh_loss, 'off_loss': off_loss,
+                            'z_loss': z_loss}
+                else:
+                    loss_stats = {'loss': loss, 'hm_loss': hm_loss,
+                            'wh_loss': wh_loss, 'off_loss': off_loss}
             elif opt.coord == 'Joint':
                 loss = opt.hm_weight * (hm_loss + hm_loss_i) + opt.wh_weight * (wh_loss + wh_loss_i) + \
                         opt.off_weight * (off_loss + off_loss_i)
@@ -186,6 +198,7 @@ class MultiAgentDetTrainer(BaseTrainer):
         super(MultiAgentDetTrainer, self).__init__(opt, model, optimizer=optimizer)
 
     def _get_losses(self, opt):
+        # loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss', 'z_loss']
         loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
         if opt.polygon and (opt.angle_weight > 0):
             loss_states.append('angle_loss')
