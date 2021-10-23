@@ -185,11 +185,11 @@ class CtdetLoss(torch.nn.Module):
                     loss_stats = {'loss': loss, 'hm_loss': hm_loss,
                             'wh_loss': wh_loss, 'off_loss': off_loss}
             elif opt.coord == 'Joint':
-                loss = opt.hm_weight * (hm_loss + hm_loss_i) + opt.wh_weight * (wh_loss + wh_loss_i) + \
+                loss = opt.hm_weight * (hm_loss + hm_loss_i) + opt.wh_weight * (wh_loss + wh_loss_i + z_loss) + \
                         opt.off_weight * (off_loss + off_loss_i)
                 loss_stats = {'loss': loss, 
                             'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss,
-                            'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i}
+                            'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i, 'z_loss': z_loss}
         return loss, loss_stats
 
 
@@ -198,8 +198,8 @@ class MultiAgentDetTrainer(BaseTrainer):
         super(MultiAgentDetTrainer, self).__init__(opt, model, optimizer=optimizer)
 
     def _get_losses(self, opt):
-        # loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss', 'z_loss']
-        loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
+        loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss', 'z_loss']
+        # loss_states = ['loss', 'hm_loss', 'wh_loss', 'off_loss']
         if opt.polygon and (opt.angle_weight > 0):
             loss_states.append('angle_loss')
         if opt.coord == 'Joint':
