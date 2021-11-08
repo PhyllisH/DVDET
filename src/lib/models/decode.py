@@ -523,9 +523,9 @@ def ctdet_decode(heat, wh, map_scale=1.0, shift_mats=None, reg=None, angle=None,
                             xs - wh[..., 0:1] / 2,
                             ys + wh[..., 1:2] / 2,
                             xs + wh[..., 0:1] / 2,
-                            ys - wh[..., 1:2] / 2,
+                            ys + wh[..., 1:2] / 2,
                             xs + wh[..., 0:1] / 2,
-                            ys + wh[..., 1:2] / 2], dim=2)
+                            ys - wh[..., 1:2] / 2], dim=2)
         bboxes = bboxes.view(batch, K, 4, 2)
         bboxes = bboxes.view(batch*K, 4, 2)
         angle = _transpose_and_gather_feat(angle, inds)

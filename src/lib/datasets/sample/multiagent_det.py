@@ -90,7 +90,8 @@ class MultiAgentDetDataset(data.Dataset):
         theta = _calc_bearing(corners[0], corners[1])
         rotation = np.array([[np.cos(theta), -np.sin(theta)],
                             [np.sin(theta), np.cos(theta)]])
-        out_points = np.matmul(corners - center, rotation) + center
+        out_corners = np.matmul(corners - center, rotation)
+        out_points = out_corners + center
         x, y = list(out_points[0, :])
         w, h = list(out_points[2, :] - out_points[0, :])
         # print(h, w)

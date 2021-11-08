@@ -25,8 +25,6 @@ from utils.oracle_utils import gen_oracle_map
 from .base_trainer import BaseTrainer
 import time
 import os
-from torch import stack 
-import torch.nn as nn
 
 def _reorganize_batch(batch):
     reorg_batch = OrderedDict()
@@ -37,59 +35,6 @@ def _reorganize_batch(batch):
             reorg_batch[k] = info.flatten(0, 1)
     return reorg_batch
 
-
-def _gather_feat(feat, ind, mask=None):
-    dim = feat.size(2)
-    ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
-    feat = feat.gather(1, ind)
-    if mask is not None:
-        mask = mask.unsqueeze(2).expand_as(feat)
-        feat = feat[mask]
-        feat = feat.view(-1, dim)
-    return feat
-
-def _transpose_and_gather_feat(feat, ind):
-    feat = feat.permute(0, 2, 3, 1).contiguous()
-    feat = feat.view(feat.size(0), -1, feat.size(3))
-    feat = _gather_feat(feat, ind)
-    return feat
-
-def rotation_2d_torch(points, angles):
-    """rotation 2d points based on origin point clockwise when angle positive.
-    
-    Args:
-        points (float array, shape=[N, point_size, 2]): points to be rotated.
-        angles (float array, shape=[N]): rotation angle.
-
-    Returns:
-        float array: same shape as points
-    """
-    rot_sin = angles[:,0]
-    rot_cos = angles[:,1]
-    rot_mat_T = torch.stack(
-        [stack([rot_cos, -rot_sin]),
-        stack([rot_sin, rot_cos])])
-    return torch.einsum('aij,jka->aik', (points, rot_mat_T))
-
-def _reg_loss(regr, gt_regr, mask):
-    ''' L1 regression loss
-      Arguments:
-        regr (batch x max_objects x dim)
-        gt_regr (batch x max_objects x dim)
-        mask (batch x max_objects)
-    '''
-    b, k, _, _ = regr.shape
-    regr = regr.view(b,k,-1)
-    gt_regr = gt_regr.view(b,k,-1)
-    num = mask.float().sum()
-    mask = mask.unsqueeze(2).expand_as(gt_regr).float()
-
-    regr = regr * mask
-    gt_regr = gt_regr * mask
-
-    regr_loss = nn.functional.smooth_l1_loss(regr, gt_regr, size_average=False)
-    regr_loss = regr_loss / (num + 1e-4)
-    return regr_loss
 class CtdetLoss(torch.nn.Module):
     def __init__(self, opt):
         super(CtdetLoss, self).__init__()
@@ -101,34 +46,6 @@ class CtdetLoss(torch.nn.Module):
                 RegWeightedL1Loss() if opt.cat_spec_wh else self.crit_reg
         self.crit_z = ZFocalLoss()
         self.opt = opt
-    
-    def _angle_loss(self, output_angle, output_wh, output_reg, wh, reg, angle, reg_mask, ind):
-        def _get_corners(wh, reg, angle):
-            corners = wh.unsqueeze(2).expand(-1,-1,4,-1)
-            corners[:,:,0] = corners[:,:,0] * (-0.5)
-            corners[:,:,1,0] = corners[:,:,0,0] * (-0.5)
-            corners[:,:,1,1] = corners[:,:,0,0] * (0.5)
-            corners[:,:,2] = corners[:,:,3] * (0.5)
-            corners[:,:,3,0] = corners[:,:,0,0] * (0.5)
-            corners[:,:,3,1] = corners[:,:,0,0] * (-0.5)
-
-            corners = corners + reg.unsqueeze(2)    # (b, k, 4, 2)q
-            b, k, _ = angle.shape
-            corners = corners.view(b*k, 4, 2)
-            angle = angle.view(b*k, 2)
-            corners = rotation_2d_torch(corners, angle)
-            return corners.view(b,k,4,2).contiguous()
-
-        pred_angle = _transpose_and_gather_feat(output_angle, ind)
-        pred_wh = _transpose_and_gather_feat(output_wh, ind)
-        pred_reg = _transpose_and_gather_feat(output_reg, ind)
-
-        # get the corners
-        pred_corners = _get_corners(pred_wh, pred_reg, pred_angle)
-        gt_corners = _get_corners(wh, reg, angle)
-
-        angle_loss = _reg_loss(pred_corners, gt_corners, reg_mask)
-        return angle_loss
 
     def forward(self, outputs, ori_batch):
         opt = self.opt
@@ -248,11 +165,9 @@ class CtdetLoss(torch.nn.Module):
                             batch['ind'], batch['cat_depth']) / opt.num_stacks
             if opt.polygon and (opt.angle_weight > 0):
                 if opt.coord in ['Global', 'Joint']:
-                    # angle_loss += self.crit_reg(
-                    #         output['angle'], batch['reg_mask'],
-                    #         batch['ind'], batch['angle']) / opt.num_stacks
-                    angle_loss += self._angle_loss(output['angle'], output['wh'], output['reg'],
-                                                     batch['wh'], batch['reg'], batch['angle'], batch['reg_mask'], batch['ind'])
+                    angle_loss += self.crit_reg(
+                            output['angle'], batch['reg_mask'],
+                            batch['ind'], batch['angle']) / opt.num_stacks
                     if opt.feat_mode == 'fused':
                         angle_loss_early += self.crit_reg(
                             output['angle_early'], batch['reg_mask'],
