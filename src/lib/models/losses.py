@@ -149,7 +149,7 @@ def _neg_loss_with_mask(pred, gt, mask):
     # print('gt:', gt.shape)
 
     pos_loss = torch.log(pred+1e-6) * torch.pow(1 - pred, 2) * pos_inds * mask.unsqueeze(-1)
-    neg_loss = torch.log(1 - pred) * torch.pow(pred, 2) * neg_weights * neg_inds * mask.unsqueeze(-1)
+    neg_loss = torch.log(1 - pred+1e-6) * torch.pow(pred, 2) * neg_weights * neg_inds * mask.unsqueeze(-1)
 
     num_pos = (pos_inds*mask.unsqueeze(-1)).float().sum()
     pos_loss = pos_loss.sum()

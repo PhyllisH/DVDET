@@ -255,6 +255,11 @@ class opts(object):
                                  help='HW or LW')
         self.parser.add_argument('--depth_mode', default='Unique',
                                  help='Unique or Weighted')
+        self.parser.add_argument('--feat_mode', default='inter',
+                                 help='early | inter | fused')
+        self.parser.add_argument('--gpu_chunk_size', default=None,
+                                 help='early | inter | fused')
+        
 
     def parse(self, args=''):
         if args == '':
@@ -297,12 +302,15 @@ class opts(object):
         if opt.master_batch_size == -1:
             opt.master_batch_size = opt.batch_size // len(opt.gpus)
         rest_batch_size = (opt.batch_size - opt.master_batch_size)
-        opt.chunk_sizes = [opt.master_batch_size]
-        for i in range(len(opt.gpus) - 1):
-            slave_chunk_size = rest_batch_size // (len(opt.gpus) - 1)
-            if i < rest_batch_size % (len(opt.gpus) - 1):
-                slave_chunk_size += 1
-            opt.chunk_sizes.append(slave_chunk_size)
+        if opt.gpu_chunk_size is None:
+            opt.chunk_sizes = [opt.master_batch_size]
+            for i in range(len(opt.gpus) - 1):
+                slave_chunk_size = rest_batch_size // (len(opt.gpus) - 1)
+                if i < rest_batch_size % (len(opt.gpus) - 1):
+                    slave_chunk_size += 1
+                opt.chunk_sizes.append(slave_chunk_size)
+        else:
+            opt.chunk_sizes = [int(x) for x in opt.gpu_chunk_size.split(',')] 
         print('training chunk_sizes:', opt.chunk_sizes)
 
         opt.root_dir = os.path.join(os.path.dirname(__file__), '..', '..')

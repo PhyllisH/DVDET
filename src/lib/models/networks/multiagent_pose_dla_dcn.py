@@ -774,26 +774,36 @@ class Saliency_Sampler(nn.Module):
         return x_sampled
 class DLASeg(nn.Module):
     def __init__(self, base_name, heads, pretrained, down_ratio, final_kernel,
-                 last_level, head_conv, out_channel=0, message_mode='NO_MESSAGE', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique'):
+                 last_level, head_conv, out_channel=0, message_mode='NO_MESSAGE', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique',
+                 feat_mode='inter'):
         super(DLASeg, self).__init__()
         assert down_ratio in [2, 4, 8, 16]
         self.first_level = int(np.log2(down_ratio))
         self.last_level = last_level
         self.warp_mode = warp_mode
         self.depth_mode = depth_mode
-        self.base = globals()[base_name](pretrained=pretrained)
-        self.base_early = globals()[base_name](pretrained=pretrained)
-        channels = self.base.channels
-        scales = [2 ** i for i in range(len(channels[self.first_level:]))]
-        self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
-        self.dla_up_early = DLAUp(self.first_level, channels[self.first_level:], scales)
+        self.feat_mode = feat_mode
 
+        if coord == 'Local' or self.feat_mode in ['inter', 'fused']:
+            self.base = globals()[base_name](pretrained=pretrained)
+            channels = self.base.channels
+            scales = [2 ** i for i in range(len(channels[self.first_level:]))]
+            self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
+
+        if coord in ['Global', 'Joint'] and self.feat_mode in ['early', 'fused']:
+            self.base_early = globals()[base_name](pretrained=pretrained)
+            channels = self.base_early.channels
+            scales = [2 ** i for i in range(len(channels[self.first_level:]))]
+            self.dla_up_early = DLAUp(self.first_level, channels[self.first_level:], scales)
+        
         if out_channel == 0:
             out_channel = channels[self.first_level]
+            # self.ida_up_early = IDAUp(out_channel, channels[self.first_level:self.last_level], 
+            #                     [2 ** i for i in range(self.last_level - self.first_level)])
 
         self.ida_up = IDAUp(out_channel, channels[self.first_level:self.last_level], 
                             [2 ** i for i in range(self.last_level - self.first_level)])
-
+        
         if coord == 'Joint':
             self.ida_up_i = IDAUp(out_channel, channels[self.first_level:self.last_level], 
                                 [2 ** i for i in range(self.last_level - self.first_level)])
@@ -858,16 +868,16 @@ class DLASeg(nn.Module):
             self.conv2 = nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1)
             self.conv3 = nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1)
         
-        if self.warp_mode == 'LW':
+        if self.warp_mode in ['LW', 'RLW']:
             hw0 = (800 * 448) // 16
             hw1 = (352 * 192)
             # self.fc0 = nn.Linear(hw0, hw1, bias=False)
             self.fc1 = nn.Linear(hw0//4, hw1//4, bias=False)
             self.fc2 = nn.Linear(hw0//16, hw1//16, bias=False)
             self.fc3 = nn.Linear(hw0//64, hw1//64, bias=False)
-        elif self.warp_mode == 'DW':
+        elif self.warp_mode in ['DW', 'DADW']:
             k_size = 5 # 7, 3
-            mode = 'CF_DCN' # 'DCN'
+            mode = 'CF_DCN' if self.warp_mode == 'DADW' else 'DCN' 
             self.DC0 = DeformConv(64, 64, k_size=k_size, mode=mode)
             self.DC1 = DeformConv(128, 128, k_size=k_size, mode=mode)
             self.DC2 = DeformConv(256, 256, k_size=k_size, mode=mode)
@@ -1240,206 +1250,303 @@ class DLASeg(nn.Module):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
         
-        # print('Warp image')
-        cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
-        worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
-        feat_zoom_mats = torch.Tensor(np.array(np.diag([4, 4, 1]), dtype=np.float32)).to(cur_trans_mats.device)
-        cur_trans_mats = feat_zoom_mats @ shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
-        images_warped = kornia.warp_perspective(images, cur_trans_mats, dsize=(192*4, 352*4))
-        # image = images[0].detach().cpu() * 255.
-        # image = kornia.tensor_to_image(image.byte())
-        # cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # cv2.imwrite('warp_img.png', image)
-        
-        x_early = self.base_early(images_warped)
-        x_early = self.dla_up_early(x_early)
+        if self.feat_mode in ['early', 'fused']:
+            # print('Warp image')
+            cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
+            worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
+            feat_zoom_mats = torch.Tensor(np.array(np.diag([4, 4, 1]), dtype=np.float32)).to(cur_trans_mats.device)
+            cur_trans_mats = feat_zoom_mats @ shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+            images_warped = kornia.warp_perspective(images, cur_trans_mats, dsize=(192*4, 352*4))
+            # image = images[0].detach().cpu() * 255.
+            # image = kornia.tensor_to_image(image.byte())
+            # cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # cv2.imwrite('warp_img.png', image)
+            
+            x_early = self.base_early(images_warped)
+            x_early = self.dla_up_early(x_early)
 
-        # Encoder
-        x = self.base(images)
-        x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+        if self.feat_mode in ['inter', 'fused']:
+            # Encoder
+            x = self.base(images)
+            x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        scale = 1/map_scale
+            scale = 1/map_scale
 
-        global_x_multi_depth = []
+            if self.depth_mode == 'Weighted':
+                # get depth weights
+                depth_weighted_feat_maps = [[] for _ in range(len(trans_mats))]
+                depth_weights_list = []
+                for c_layer, feat_map in enumerate(x):
+                    depth_weights = eval('self.conv'+str(c_layer))(feat_map)    # (B, D, h, w)
+                    depth_weights = F.softmax(depth_weights, dim=1)
+                    depth_weighted_feat_map = depth_weights.unsqueeze(2) * feat_map.unsqueeze(1)   # (B, D, C, h, w)
+                    depth_weighted_feat_map = depth_weighted_feat_map.unbind(1)
+                    for depth_layer in range(len(trans_mats)):
+                        depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
+                    depth_weights_list.append(depth_weights)
+            else:
+                trans_mats = [trans_mats[0]]
+                depth_weighted_feat_maps = [x]
+            
+            global_x_multi_depth = []
+            if self.depth_mode == 'Weighted':
+                global_depth_weights_list = []
+                for depth_layer, init_trans_mats in enumerate(trans_mats):
+                    cur_x = depth_weighted_feat_maps[depth_layer]
+                    global_x_HW = []
+                    warp_images_list = []
+                    init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
 
-        if self.depth_mode == 'Weighted':
-            # get depth weights
-            depth_weighted_feat_maps = [[] for _ in range(len(trans_mats))]
-            depth_weights_list = []
-            for c_layer, feat_map in enumerate(x):
-                depth_weights = eval('self.conv'+str(c_layer))(feat_map)    # (B, D, h, w)
-                depth_weights = F.softmax(depth_weights, dim=1)
-                depth_weighted_feat_map = depth_weights.unsqueeze(2) * feat_map.unsqueeze(1)   # (B, D, C, h, w)
-                depth_weighted_feat_map = depth_weighted_feat_map.unbind(1)
-                for depth_layer in range(len(trans_mats)):
-                    depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
-                depth_weights_list.append(depth_weights)
-        else:
-            trans_mats = [trans_mats[0]]
-            depth_weighted_feat_maps = [x]
+                    for c_layer, feat_map in enumerate(cur_x):
+                        _, c, h, w = feat_map.size()
+                        shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
 
-        global_depth_weights_list = []
-        for depth_layer, init_trans_mats in enumerate(trans_mats):
-            cur_x = depth_weighted_feat_maps[depth_layer]
-            global_x = []
-            offset_list = []
-            mask_list = []
-            warp_images_list = []
-            trans_mats_list = []
-            init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
-            # cur_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
-            # fig, axes = plt.subplots(5, 4)
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        img_trans_mats = shift_mats[c_layer].view(b*num_agents, 3, 3).contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+                        warp_images = kornia.warp_perspective(images, img_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        warp_images_list.append(warp_images)
 
-            for c_layer, feat_map in enumerate(cur_x):
-                _, c, h, w = feat_map.size()
-                shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+                        #########################################################################
+                        #                              Hard Warping                             #
+                        #########################################################################
+                        # uav_i --> global coord
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                        cur_trans_mats = shift_mats[c_layer].contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                        global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
 
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                img_trans_mats = shift_mats[c_layer].view(b*num_agents, 3, 3) @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous()
-                warp_images = kornia.warp_perspective(images, img_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                warp_images_list.append(warp_images)
-
-                # # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
-                if self.warp_mode == 'LW':
-                    #########################################################################
-                    #                             Learnt Warping                            #
-                    #########################################################################
-                    if c_layer == 0:
+                        if len(global_depth_weights_list) < 4:
+                            global_depth_weights = kornia.warp_perspective(depth_weights_list[c_layer], cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_depth_weights_list.append(global_depth_weights)
+                        
+                        global_x_HW.append(global_feat)
+                        
+                    global_x_multi_depth.append(global_x_HW)
+                
+                global_x_HW = []
+                for c_layer in range(len(x)):
+                    cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
+                    cur_feat_map = torch.cat(cur_feat_map, dim=1)
+                    cur_feat_map = torch.mean(cur_feat_map, dim=1)
+                    global_x_HW.append(cur_feat_map)
+                
+                global_x = []
+                for c_layer, (feat_map, feat_map_HW) in enumerate(zip(x, global_x_HW)):
+                    _, c, h, w = feat_map.size()
+                    shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+                    # # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+                    if self.warp_mode in ['DW', 'DADW']:
+                        #########################################################################
+                        #                          Deformable Warping                           #
+                        #########################################################################
+                        # h_b, w_b = int(192/2**c_layer*scale), int(352/2**c_layer*scale)
+                        # grid_y, grid_x = torch.meshgrid(torch.arange(0, h_b), torch.arange(0, w_b))
+                        # grid = torch.stack((grid_x, grid_y), 2).type_as(feat_map)  # (w, h, 2)
+                        # grid.requires_grad = False
                         worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
                         feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
                         cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                        global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    else:
-                        flat_feat_map = feat_map.view(-1, c, h*w).contiguous()
-                        global_feat = eval('self.fc'+str(c_layer))(flat_feat_map)
-                        global_feat = global_feat.view(-1, c, int(192/2**c_layer), int(352/2**c_layer))
-                elif self.warp_mode == 'DW':
-                    #########################################################################
-                    #                          Deformable Warping                           #
-                    #########################################################################
-                    # h_b, w_b = int(192/2**c_layer*scale), int(352/2**c_layer*scale)
-                    # grid_y, grid_x = torch.meshgrid(torch.arange(0, h_b), torch.arange(0, w_b))
-                    # grid = torch.stack((grid_x, grid_y), 2).type_as(feat_map)  # (w, h, 2)
-                    # grid.requires_grad = False
-                    worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
-                    cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                    # cur_trans_mats = shift_mats[c_layer] @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                    
-                    ### Residual 
-                    global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    global_feat_res, offset, mask = eval('self.DC'+str(c_layer))(global_feat_res, return_offset=True)
-                    global_feat = global_feat_HW + global_feat_res
-                    
-                    ### Bilinear
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
-                    
-                    ### Nearest
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
-                    
-                    # print(c_layer, global_feat.shape, offset.shape, mask.shape) # 0, (1, 50, 192, 352); 0, (96, 176); 0, (48, 88); 0, (24, 44)
-                    offset_list.append(offset)
-                    mask_list.append(mask)
+                        # cur_trans_mats = shift_mats[c_layer] @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                        
+                        ### Residual 
+                        # global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        global_feat_res = eval('self.DC'+str(c_layer))(global_feat_res, return_offset=False)
+                        global_feat = feat_map_HW + global_feat_res
+                        
+                        ### Bilinear
+                        # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                        
+                        ### Nearest
+                        # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                        
+                        # print(c_layer, global_feat.shape, offset.shape, mask.shape) # 0, (1, 50, 192, 352); 0, (96, 176); 0, (48, 88); 0, (24, 44)
+                        # offset_list.append(offset)
+                        # mask_list.append(mask)
 
-                    # b, N, h, w = offset.shape
-                    # offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
-                    # fig, axes = plt.subplots(3, 3)
-                    # for i, h_i in enumerate(range(50//(2**c_layer), h, 50//(2**c_layer))):
-                    #     for j, w_j in enumerate(range(100//(2**c_layer), w, 100//(2**c_layer))):
-                    #         axes[i,j].plot(w_j, h_i, 'bo')
-                    #         axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
-                    #         axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
-                    #         axes[i,j].set_xticks([])
-                    #         axes[i,j].set_yticks([])
-                    # plt.savefig('offset.png')
+                        # b, N, h, w = offset.shape
+                        # offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
+                        # fig, axes = plt.subplots(3, 3)
+                        # for i, h_i in enumerate(range(50//(2**c_layer), h, 50//(2**c_layer))):
+                        #     for j, w_j in enumerate(range(100//(2**c_layer), w, 100//(2**c_layer))):
+                        #         axes[i,j].plot(w_j, h_i, 'bo')
+                        #         axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+                        #         axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+                        #         axes[i,j].set_xticks([])
+                        #         axes[i,j].set_yticks([])
+                        # plt.savefig('offset.png')
+                        # plt.close()
+                        # import ipdb; ipdb.set_trace()
+                    else:
+                        global_feat = feat_map_HW
+                    global_x.append(global_feat)
+            else:
+                for depth_layer, init_trans_mats in enumerate(trans_mats):
+                    cur_x = depth_weighted_feat_maps[depth_layer]
+                    global_x = []
+                    offset_list = []
+                    mask_list = []
+                    warp_images_list = []
+                    trans_mats_list = []
+                    init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
+                    # cur_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
+                    # fig, axes = plt.subplots(5, 4)
+
+                    for c_layer, feat_map in enumerate(cur_x):
+                        _, c, h, w = feat_map.size()
+                        shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        img_trans_mats = shift_mats[c_layer].view(b*num_agents, 3, 3).contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+                        warp_images = kornia.warp_perspective(images, img_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        warp_images_list.append(warp_images)
+
+                        # # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+                        if self.warp_mode in ['LW', 'RLW']:
+                            #########################################################################
+                            #                             Learnt Warping                            #
+                            #########################################################################
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            
+                            if c_layer == 0:
+                                global_feat = global_feat_HW
+                            else:
+                                flat_feat_map = feat_map.view(-1, c, h*w).contiguous()
+                                global_feat_res = eval('self.fc'+str(c_layer))(flat_feat_map)
+                                global_feat_res = global_feat_res.view(-1, c, int(192/2**c_layer), int(352/2**c_layer))
+                                if self.warp_mode == 'LW':
+                                    global_feat = global_feat_res
+                                else:
+                                    global_feat = global_feat_HW + global_feat_res
+                        elif self.warp_mode in ['DW', 'DADW']:
+                            #########################################################################
+                            #                          Deformable Warping                           #
+                            #########################################################################
+                            # h_b, w_b = int(192/2**c_layer*scale), int(352/2**c_layer*scale)
+                            # grid_y, grid_x = torch.meshgrid(torch.arange(0, h_b), torch.arange(0, w_b))
+                            # grid = torch.stack((grid_x, grid_y), 2).type_as(feat_map)  # (w, h, 2)
+                            # grid.requires_grad = False
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            # cur_trans_mats = shift_mats[c_layer] @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            
+                            ### Residual 
+                            global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_feat_res = eval('self.DC'+str(c_layer))(global_feat_res, return_offset=False)
+                            global_feat = global_feat_HW + global_feat_res
+                            
+                            ### Bilinear
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                            
+                            ### Nearest
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                            
+                            # print(c_layer, global_feat.shape, offset.shape, mask.shape) # 0, (1, 50, 192, 352); 0, (96, 176); 0, (48, 88); 0, (24, 44)
+                            # offset_list.append(offset)
+                            # mask_list.append(mask)
+
+                            # b, N, h, w = offset.shape
+                            # offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
+                            # fig, axes = plt.subplots(3, 3)
+                            # for i, h_i in enumerate(range(50//(2**c_layer), h, 50//(2**c_layer))):
+                            #     for j, w_j in enumerate(range(100//(2**c_layer), w, 100//(2**c_layer))):
+                            #         axes[i,j].plot(w_j, h_i, 'bo')
+                            #         axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+                            #         axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+                            #         axes[i,j].set_xticks([])
+                            #         axes[i,j].set_yticks([])
+                            # plt.savefig('offset.png')
+                            # plt.close()
+                            # import ipdb; ipdb.set_trace()
+                        elif self.warp_mode == 'SW':
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            
+                            ### Residual
+                            # global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat_res = eval('self.saliency'+str(c_layer))(global_feat_res)
+                            # global_feat = global_feat_HW + global_feat_res
+
+                            ### Bilinear
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            if c_layer == 0:
+                                global_feat = eval('self.saliency'+str(c_layer))(global_feat, images_warped)
+                            
+                            ### Nearest
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = eval('self.saliency'+str(c_layer))(global_feat)
+                        elif self.warp_mode == 'SWU':
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+
+                            ### Bilinear
+                            if c_layer == 0:
+                                feat_map = eval('self.saliency'+str(c_layer))(feat_map, images_warped)
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        else:
+                            #########################################################################
+                            #                              Hard Warping                             #
+                            #########################################################################
+                            # uav_i --> global coord
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(2**(c_layer+4)*scale), 0, 0], [0, 1/(2**(c_layer+4)*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(500/2**c_layer*scale), 0, 0], [0, 1/(500/2**c_layer*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer].contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
+                            # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
+
+                        global_x.append(global_feat)
+                        
+                        # val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
+                        # for j in range(min(5, val_mats.shape[0])):
+                        #     axes[j, c_layer].imshow((val_mats[j]*255.).astype('uint8'))
+                        #     axes[j, c_layer].set_xticks([])
+                        #     axes[j, c_layer].set_yticks([])
+
+                    # plt.savefig('featmap.png')
                     # plt.close()
-                    # import ipdb; ipdb.set_trace()
-                elif self.warp_mode == 'SW':
-                    worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
-                    cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                    
-                    ### Residual
-                    # global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat_res = eval('self.saliency'+str(c_layer))(global_feat_res)
-                    # global_feat = global_feat_HW + global_feat_res
-
-                    ### Bilinear
-                    global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    if c_layer == 0:
-                        global_feat = eval('self.saliency'+str(c_layer))(global_feat, images_warped)
-                    
-                    ### Nearest
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat = eval('self.saliency'+str(c_layer))(global_feat)
-                elif self.warp_mode == 'SWU':
-                    worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
-                    cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-
-                    ### Bilinear
-                    if c_layer == 0:
-                        feat_map = eval('self.saliency'+str(c_layer))(feat_map, images_warped)
-                    global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                    global_x_multi_depth.append(global_x)
+            
+                if len(global_x_multi_depth) > 1:
+                    global_x = []
+                    for c_layer in range(len(x)):
+                        cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
+                        cur_feat_map = torch.cat(cur_feat_map, dim=1)
+                        cur_feat_map = torch.mean(cur_feat_map, dim=1)
+                        global_x.append(cur_feat_map)        
                 else:
-                    #########################################################################
-                    #                              Hard Warping                             #
-                    #########################################################################
-                    # uav_i --> global coord
-                    # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(init_trans_mats.device)
-                    # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(2**(c_layer+4)*scale), 0, 0], [0, 1/(2**(c_layer+4)*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(500/2**c_layer*scale), 0, 0], [0, 1/(500/2**c_layer*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                    feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
-                    cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                    global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
-                    # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
-                    # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
-
-                    if len(global_depth_weights_list) >= 4:
-                        pass
-                    else:
-                        global_depth_weights = kornia.warp_perspective(depth_weights_list[c_layer], cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                
-                global_x.append(global_feat)
-                global_depth_weights_list.append(global_depth_weights)
-                
-                # val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
-                # for j in range(min(5, val_mats.shape[0])):
-                #     axes[j, c_layer].imshow((val_mats[j]*255.).astype('uint8'))
-                #     axes[j, c_layer].set_xticks([])
-                #     axes[j, c_layer].set_yticks([])
-
-            # plt.savefig('featmap.png')
-            # plt.close()
-            global_x_multi_depth.append(global_x)
-        
-        if len(global_x_multi_depth) > 1:
-            global_x = []
-            for c_layer in range(len(x)):
-                cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
-                cur_feat_map = torch.cat(cur_feat_map, dim=1)
-                cur_feat_map = torch.mean(cur_feat_map, dim=1)
-                global_x.append(cur_feat_map)        
-        else:
-            global_x = global_x_multi_depth[0]
+                    global_x = global_x_multi_depth[0]
         
         #########################################################################
         #        Merge the feature of multi-agents (with bandwidth cost)        #
         #########################################################################
+        global_x_fused = []
         if self.trans_layer[-1] == -2:
-            for c_layer, feat_map in enumerate(x_early):
-                # Mean
-                # global_x[c_layer] = global_x[c_layer] + feat_map
-                # Max
-                global_x[c_layer] = torch.cat([global_x[c_layer].unsqueeze(1), feat_map.unsqueeze(1)], dim=1).max(dim=1)[0]
+            if self.feat_mode == 'fused':
+                for c_layer, feat_map in enumerate(x_early):
+                    # Mean
+                    # global_x[c_layer] = global_x[c_layer] + feat_map
+                    # global_x_fused.append(torch.cat([global_x[c_layer].unsqueeze(1), feat_map.unsqueeze(1)], dim=1).mean(dim=1))
+                    # Max
+                    global_x_fused.append(torch.cat([global_x[c_layer].unsqueeze(1), feat_map.unsqueeze(1)], dim=1).max(dim=1)[0])
         else:
             for c_layer, feat_map in enumerate(global_x):
                 _, c, h, w = feat_map.shape
@@ -1461,10 +1568,29 @@ class DLASeg(nn.Module):
                 feat_map = feat_map.view(b*num_agents, c, h, w)
                 global_x[c_layer] = feat_map
 
-        y = []
-        for i in range(self.last_level - self.first_level):
-            y.append(global_x[i].clone())
-        self.ida_up(y, 0, len(y))
+        if self.feat_mode == 'early':
+            y = []
+            for i in range(self.last_level - self.first_level):
+                y.append(x_early[i].clone())
+            # self.ida_up_early(y, 0, len(y))
+            self.ida_up(y, 0, len(y))
+        elif self.feat_mode == 'inter':
+            y = []
+            for i in range(self.last_level - self.first_level):
+                y.append(global_x[i].clone())
+            self.ida_up(y, 0, len(y))
+        elif self.feat_mode == 'fused':
+            y = []
+            y_early = []
+            y_fused = []
+            for i in range(self.last_level - self.first_level):
+                y.append(global_x[i].clone())
+                y_early.append(x_early[i].clone())
+                y_fused.append(global_x_fused[i].clone())
+            self.ida_up(y, 0, len(y))
+            self.ida_up(y_early, 0, len(y_early))
+            # self.ida_up_early(y_early, 0, len(y_early)
+            self.ida_up(y_fused, 0, len(y_fused))
 
         _, _, h, w = y[-1].shape
         # trans_mats_inverse = torch.inverse(trans_mats_list[0]).view(b, num_agents, 3, 3).contiguous().view(b*num_agents, 3, 3).contiguous()
@@ -1472,6 +1598,11 @@ class DLASeg(nn.Module):
         z = {}
         for head in self.heads:
             global_z[head] = self.__getattr__(head)(y[-1]) # (b*num_agent, 2, 112, 200)
+            if self.feat_mode == 'fused':
+                global_z[head+'_early'] = self.__getattr__(head)(y_early[-1])
+                global_z[head+'_fused'] = self.__getattr__(head)(y_fused[-1])
+            # global_z[head] = self.__getattr__(head)(y_fused[-1])
+            # global_z[head] = self.__getattr__(head)(y_early[-1])
             # z[head] = kornia.warp_perspective(global_z[head], trans_mats_inverse, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
         # return [z]
 
@@ -1503,7 +1634,8 @@ class DLASeg(nn.Module):
         #         # axes[i,j].set_yticks([])
         #         plt.savefig('offset/{}_{}.png'.format(index_i, layer_i))
         #         plt.close()
-        global_z['z'] = global_depth_weights_list[0]
+        if self.depth_mode == 'Weighted':
+            global_z['z'] = global_depth_weights_list[0]
         return [global_z]
     
     def JointCoord_forward(self, images, trans_mats, shift_mats, map_scale):
@@ -1511,108 +1643,303 @@ class DLASeg(nn.Module):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
         
-        # print('Warp image')
-        cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
-        worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
-        feat_zoom_mats = torch.Tensor(np.array(np.diag([4, 4, 1]), dtype=np.float32)).to(cur_trans_mats.device)
-        cur_trans_mats = feat_zoom_mats @ shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
-        images_warped = kornia.warp_perspective(images, cur_trans_mats, dsize=(192*4, 352*4))
-        
-        x_early = self.base_early(images_warped)
-        x_early = self.dla_up_early(x_early)
+        if self.feat_mode in ['early', 'fused']:
+            # print('Warp image')
+            cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
+            worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
+            feat_zoom_mats = torch.Tensor(np.array(np.diag([4, 4, 1]), dtype=np.float32)).to(cur_trans_mats.device)
+            cur_trans_mats = feat_zoom_mats @ shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+            images_warped = kornia.warp_perspective(images, cur_trans_mats, dsize=(192*4, 352*4))
+            # image = images[0].detach().cpu() * 255.
+            # image = kornia.tensor_to_image(image.byte())
+            # cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            # cv2.imwrite('warp_img.png', image)
+            
+            x_early = self.base_early(images_warped)
+            x_early = self.dla_up_early(x_early)
 
-        # Encoder
-        x = self.base(images)
-        x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
+        if self.feat_mode in ['inter', 'fused']:
+            # Encoder
+            x = self.base(images)
+            x = self.dla_up(x)  # list [(B, 64, 112, 200), (B, 128, 56, 100), (B, 256, 28, 50), (B, 512, 14, 25)] B = b * num_agents
 
-        scale = 1/map_scale
+            scale = 1/map_scale
 
-        global_x_multi_depth = []
+            if self.depth_mode == 'Weighted':
+                # get depth weights
+                depth_weighted_feat_maps = [[] for _ in range(len(trans_mats))]
+                depth_weights_list = []
+                for c_layer, feat_map in enumerate(x):
+                    depth_weights = eval('self.conv'+str(c_layer))(feat_map)    # (B, D, h, w)
+                    depth_weights = F.softmax(depth_weights, dim=1)
+                    depth_weighted_feat_map = depth_weights.unsqueeze(2) * feat_map.unsqueeze(1)   # (B, D, C, h, w)
+                    depth_weighted_feat_map = depth_weighted_feat_map.unbind(1)
+                    for depth_layer in range(len(trans_mats)):
+                        depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
+                    depth_weights_list.append(depth_weights)
+            else:
+                trans_mats = [trans_mats[0]]
+                depth_weighted_feat_maps = [x]
+            
+            global_x_multi_depth = []
+            if self.depth_mode == 'Weighted':
+                global_depth_weights_list = []
+                for depth_layer, init_trans_mats in enumerate(trans_mats):
+                    cur_x = depth_weighted_feat_maps[depth_layer]
+                    global_x_HW = []
+                    warp_images_list = []
+                    init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
 
-        # --------------- Message Passing and Feature Extraction -------------- #
-        scale = 1/map_scale
-        
-        global_x_multi_depth = []
+                    for c_layer, feat_map in enumerate(cur_x):
+                        _, c, h, w = feat_map.size()
+                        shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
 
-        if self.depth_mode == 'Weighted':
-            # get depth weights
-            depth_weighted_feat_maps = [[] for _ in range(len(trans_mats))]
-            depth_weights_list = []
-            for c_layer, feat_map in enumerate(x):
-                depth_weights = eval('self.conv'+str(c_layer))(feat_map)    # (B, D, h, w)
-                depth_weights = F.softmax(depth_weights, dim=1)
-                depth_weighted_feat_map = depth_weights.unsqueeze(2) * feat_map.unsqueeze(1)   # (B, D, C, h, w)
-                depth_weighted_feat_map = depth_weighted_feat_map.unbind(1)
-                for depth_layer in range(len(trans_mats)):
-                    depth_weighted_feat_maps[depth_layer].append(depth_weighted_feat_map[depth_layer])
-                depth_weights_list.append(depth_weights)
-        else:
-            trans_mats = [trans_mats[0]]
-            depth_weighted_feat_maps = [x]
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        img_trans_mats = shift_mats[c_layer].view(b*num_agents, 3, 3).contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+                        warp_images = kornia.warp_perspective(images, img_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        warp_images_list.append(warp_images)
 
-        global_depth_weights_list = []
-        for depth_layer, init_trans_mats in enumerate(trans_mats):
-            cur_x = depth_weighted_feat_maps[depth_layer]
-            global_x = []
-            init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
-            # cur_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
-            # fig, axes = plt.subplots(5, 4)
+                        #########################################################################
+                        #                              Hard Warping                             #
+                        #########################################################################
+                        # uav_i --> global coord
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                        cur_trans_mats = shift_mats[c_layer].contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                        global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
 
-            for c_layer, feat_map in enumerate(cur_x):
-                _, c, h, w = feat_map.size()
-                shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+                        if len(global_depth_weights_list) < 4:
+                            global_depth_weights = kornia.warp_perspective(depth_weights_list[c_layer], cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_depth_weights_list.append(global_depth_weights)
+                        
+                        global_x_HW.append(global_feat)
+                        
+                    global_x_multi_depth.append(global_x_HW)
+                
+                global_x_HW = []
+                for c_layer in range(len(x)):
+                    cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
+                    cur_feat_map = torch.cat(cur_feat_map, dim=1)
+                    cur_feat_map = torch.mean(cur_feat_map, dim=1)
+                    global_x_HW.append(cur_feat_map)
+                
+                global_x = []
+                for c_layer, (feat_map, feat_map_HW) in enumerate(zip(x, global_x_HW)):
+                    _, c, h, w = feat_map.size()
+                    shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+                    # # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+                    if self.warp_mode in ['DW', 'DADW']:
+                        #########################################################################
+                        #                          Deformable Warping                           #
+                        #########################################################################
+                        # h_b, w_b = int(192/2**c_layer*scale), int(352/2**c_layer*scale)
+                        # grid_y, grid_x = torch.meshgrid(torch.arange(0, h_b), torch.arange(0, w_b))
+                        # grid = torch.stack((grid_x, grid_y), 2).type_as(feat_map)  # (w, h, 2)
+                        # grid.requires_grad = False
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                        cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                        # cur_trans_mats = shift_mats[c_layer] @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                        
+                        ### Residual 
+                        # global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        global_feat_res = eval('self.DC'+str(c_layer))(global_feat_res, return_offset=False)
+                        global_feat = feat_map_HW + global_feat_res
+                        
+                        ### Bilinear
+                        # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                        
+                        ### Nearest
+                        # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                        
+                        # print(c_layer, global_feat.shape, offset.shape, mask.shape) # 0, (1, 50, 192, 352); 0, (96, 176); 0, (48, 88); 0, (24, 44)
+                        # offset_list.append(offset)
+                        # mask_list.append(mask)
 
-                #########################################################################
-                #                              Hard Warping                             #
-                #########################################################################
-                # uav_i --> global coord
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(init_trans_mats.device)
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(2**(c_layer+4)*scale), 0, 0], [0, 1/(2**(c_layer+4)*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(500/2**c_layer*scale), 0, 0], [0, 1/(500/2**c_layer*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
-                worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
-                feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
-                cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
-                global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
-                # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
-                # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
+                        # b, N, h, w = offset.shape
+                        # offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
+                        # fig, axes = plt.subplots(3, 3)
+                        # for i, h_i in enumerate(range(50//(2**c_layer), h, 50//(2**c_layer))):
+                        #     for j, w_j in enumerate(range(100//(2**c_layer), w, 100//(2**c_layer))):
+                        #         axes[i,j].plot(w_j, h_i, 'bo')
+                        #         axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+                        #         axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+                        #         axes[i,j].set_xticks([])
+                        #         axes[i,j].set_yticks([])
+                        # plt.savefig('offset.png')
+                        # plt.close()
+                        # import ipdb; ipdb.set_trace()
+                    else:
+                        global_feat = feat_map_HW
+                    global_x.append(global_feat)
+            else:
+                for depth_layer, init_trans_mats in enumerate(trans_mats):
+                    cur_x = depth_weighted_feat_maps[depth_layer]
+                    global_x = []
+                    offset_list = []
+                    mask_list = []
+                    warp_images_list = []
+                    trans_mats_list = []
+                    init_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
+                    # cur_trans_mats = init_trans_mats.view(b*num_agents, 3, 3)
+                    # fig, axes = plt.subplots(5, 4)
 
-                if len(global_depth_weights_list) >= 4:
-                    pass
+                    for c_layer, feat_map in enumerate(cur_x):
+                        _, c, h, w = feat_map.size()
+                        shift_mats[c_layer] = shift_mats[c_layer].view(b*num_agents, 3, 3)
+
+                        worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                        img_trans_mats = shift_mats[c_layer].view(b*num_agents, 3, 3).contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+                        warp_images = kornia.warp_perspective(images, img_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        warp_images_list.append(warp_images)
+
+                        # # 2. Get the value mat (trans feature to global coord)  # val_mat: (b, k_agents, q_agents, c, h, w)
+                        if self.warp_mode in ['LW', 'RLW']:
+                            #########################################################################
+                            #                             Learnt Warping                            #
+                            #########################################################################
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            
+                            if c_layer == 0:
+                                global_feat = global_feat_HW
+                            else:
+                                flat_feat_map = feat_map.view(-1, c, h*w).contiguous()
+                                global_feat_res = eval('self.fc'+str(c_layer))(flat_feat_map)
+                                global_feat_res = global_feat_res.view(-1, c, int(192/2**c_layer), int(352/2**c_layer))
+                                if self.warp_mode == 'LW':
+                                    global_feat = global_feat_res
+                                else:
+                                    global_feat = global_feat_HW + global_feat_res
+                        elif self.warp_mode in ['DW', 'DADW']:
+                            #########################################################################
+                            #                          Deformable Warping                           #
+                            #########################################################################
+                            # h_b, w_b = int(192/2**c_layer*scale), int(352/2**c_layer*scale)
+                            # grid_y, grid_x = torch.meshgrid(torch.arange(0, h_b), torch.arange(0, w_b))
+                            # grid = torch.stack((grid_x, grid_y), 2).type_as(feat_map)  # (w, h, 2)
+                            # grid.requires_grad = False
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            # cur_trans_mats = shift_mats[c_layer] @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            
+                            ### Residual 
+                            global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            global_feat_res = eval('self.DC'+str(c_layer))(global_feat_res, return_offset=False)
+                            global_feat = global_feat_HW + global_feat_res
+                            
+                            ### Bilinear
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                            
+                            ### Nearest
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat, offset, mask = eval('self.DC'+str(c_layer))(global_feat, return_offset=True)
+                            
+                            # print(c_layer, global_feat.shape, offset.shape, mask.shape) # 0, (1, 50, 192, 352); 0, (96, 176); 0, (48, 88); 0, (24, 44)
+                            # offset_list.append(offset)
+                            # mask_list.append(mask)
+
+                            # b, N, h, w = offset.shape
+                            # offset_heatmap = offset.view(b, 2, N//2, h, w).cpu().numpy()
+                            # fig, axes = plt.subplots(3, 3)
+                            # for i, h_i in enumerate(range(50//(2**c_layer), h, 50//(2**c_layer))):
+                            #     for j, w_j in enumerate(range(100//(2**c_layer), w, 100//(2**c_layer))):
+                            #         axes[i,j].plot(w_j, h_i, 'bo')
+                            #         axes[i,j].plot(offset_heatmap[0, 1, :, h_i, w_j], offset_heatmap[0, 0, :, h_i, w_j], 'r*')
+                            #         axes[i,j].imshow((warp_images[0].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+                            #         axes[i,j].set_xticks([])
+                            #         axes[i,j].set_yticks([])
+                            # plt.savefig('offset.png')
+                            # plt.close()
+                            # import ipdb; ipdb.set_trace()
+                        elif self.warp_mode == 'SW':
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            
+                            ### Residual
+                            # global_feat_HW = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat_res = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat_res = eval('self.saliency'+str(c_layer))(global_feat_res)
+                            # global_feat = global_feat_HW + global_feat_res
+
+                            ### Bilinear
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            if c_layer == 0:
+                                global_feat = eval('self.saliency'+str(c_layer))(global_feat, images_warped)
+                            
+                            ### Nearest
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = eval('self.saliency'+str(c_layer))(global_feat)
+                        elif self.warp_mode == 'SWU':
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*scale, 0, 0], [0, 2**c_layer*scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer] @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+
+                            ### Bilinear
+                            if c_layer == 0:
+                                feat_map = eval('self.saliency'+str(c_layer))(feat_map, images_warped)
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                        else:
+                            #########################################################################
+                            #                              Hard Warping                             #
+                            #########################################################################
+                            # uav_i --> global coord
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[500/(w*scale), 0, -200], [0, 500/(h*scale), -250], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(w*scale), 0, 0], [0, 1/(h*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(2**(c_layer+4)*scale), 0, 0], [0, 1/(2**(c_layer+4)*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            # worldgrid2worldcoord_mat = torch.Tensor(np.array([[1/(500/2**c_layer*scale), 0, 0], [0, 1/(500/2**c_layer*scale), 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            worldgrid2worldcoord_mat = torch.Tensor(np.array([[2**c_layer*map_scale, 0, 0], [0, 2**c_layer*map_scale, 0], [0, 0, 1]])).to(init_trans_mats.device)
+                            feat_zoom_mats = torch.Tensor(np.array(np.diag([2**(c_layer+2), 2**(c_layer+2), 1]), dtype=np.float32)).to(init_trans_mats.device)
+                            cur_trans_mats = shift_mats[c_layer].contiguous() @ torch.inverse(init_trans_mats @ worldgrid2worldcoord_mat).contiguous() @ feat_zoom_mats
+                            global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, mode='nearest', dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(2**(c_layer+4)*scale, 2**(c_layer+4)*scale)) # (b*num_agents, c, h, w)
+                            # global_feat = kornia.warp_perspective(feat_map, cur_trans_mats, dsize=(h*scale, w*scale)) # (b*num_agents, c, h, w)
+                            # global_feat = kornia.resize(global_feat, size=(h*4, w*4))
+
+                        global_x.append(global_feat)
+                        
+                        # val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
+                        # for j in range(min(5, val_mats.shape[0])):
+                        #     axes[j, c_layer].imshow((val_mats[j]*255.).astype('uint8'))
+                        #     axes[j, c_layer].set_xticks([])
+                        #     axes[j, c_layer].set_yticks([])
+
+                    # plt.savefig('featmap.png')
+                    # plt.close()
+                    global_x_multi_depth.append(global_x)
+            
+                if len(global_x_multi_depth) > 1:
+                    global_x = []
+                    for c_layer in range(len(x)):
+                        cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
+                        cur_feat_map = torch.cat(cur_feat_map, dim=1)
+                        cur_feat_map = torch.mean(cur_feat_map, dim=1)
+                        global_x.append(cur_feat_map)        
                 else:
-                    global_depth_weights = kornia.warp_perspective(depth_weights_list[c_layer], cur_trans_mats, dsize=(int(192/2**c_layer*scale), int(352/2**c_layer*scale)))
-                
-                global_x.append(global_feat)
-                global_depth_weights_list.append(global_depth_weights)
-                
-                # val_mats = global_feat.max(dim=-3)[0].detach().cpu().numpy()
-                # for j in range(min(5, val_mats.shape[0])):
-                #     axes[j, c_layer].imshow((val_mats[j]*255.).astype('uint8'))
-                #     axes[j, c_layer].set_xticks([])
-                #     axes[j, c_layer].set_yticks([])
-
-            # plt.savefig('featmap.png')
-            # plt.close()
-            global_x_multi_depth.append(global_x)
-        
-        if len(global_x_multi_depth) > 1:
-            global_x = []
-            for c_layer in range(len(x)):
-                cur_feat_map = [global_x_multi_depth[i][c_layer].unsqueeze(1) for i in range(len(global_x_multi_depth))]    # (B,D,C,H,W)
-                cur_feat_map = torch.cat(cur_feat_map, dim=1)
-                cur_feat_map = torch.mean(cur_feat_map, dim=1)
-                global_x.append(cur_feat_map)        
-        else:
-            global_x = global_x_multi_depth[0]
+                    global_x = global_x_multi_depth[0]
         
         #########################################################################
         #        Merge the feature of multi-agents (with bandwidth cost)        #
         #########################################################################
+        global_x_fused = []
         if self.trans_layer[-1] == -2:
-            for c_layer, feat_map in enumerate(x_early):
-                global_x[c_layer] = global_x[c_layer] + feat_map
+            if self.feat_mode == 'fused':
+                for c_layer, feat_map in enumerate(x_early):
+                    # Mean
+                    # global_x[c_layer] = global_x[c_layer] + feat_map
+                    # global_x_fused.append(torch.cat([global_x[c_layer].unsqueeze(1), feat_map.unsqueeze(1)], dim=1).mean(dim=1))
+                    # Max
+                    global_x_fused.append(torch.cat([global_x[c_layer].unsqueeze(1), feat_map.unsqueeze(1)], dim=1).max(dim=1)[0])
         else:
             for c_layer, feat_map in enumerate(global_x):
                 _, c, h, w = feat_map.shape
@@ -1646,19 +1973,41 @@ class DLASeg(nn.Module):
                 z[head] = self.__getattr__(head)(y[-1]) # (b*num_images, 2, 112, 200)
         
         # ---------------------------- BEV Detection -------------------------- #
-        global_y = []
-        for i in range(self.last_level - self.first_level):
-            global_y.append(global_x[i].clone())
-
-        self.ida_up(global_y, 0, len(global_y))
+        if self.feat_mode == 'early':
+            global_y = []
+            for i in range(self.last_level - self.first_level):
+                global_y.append(x_early[i].clone())
+            # self.ida_up_early(y, 0, len(y))
+            self.ida_up(global_y, 0, len(global_y))
+        elif self.feat_mode == 'inter':
+            global_y = []
+            for i in range(self.last_level - self.first_level):
+                global_y.append(global_x[i].clone())
+            self.ida_up(global_y, 0, len(global_y))
+        elif self.feat_mode == 'fused':
+            global_y = []
+            global_y_early = []
+            global_y_fused = []
+            for i in range(self.last_level - self.first_level):
+                global_y.append(global_x[i].clone())
+                global_y_early.append(x_early[i].clone())
+                global_y_fused.append(global_x_fused[i].clone())
+            self.ida_up(global_y, 0, len(global_y))
+            self.ida_up(global_y_early, 0, len(global_y_early))
+            # self.ida_up_early(y_early, 0, len(y_early)
+            self.ida_up(global_y_fused, 0, len(global_y_fused))
 
         global_z = {}
         for head in self.heads:
             if '_i' in head:
                 continue
             global_z[head] = self.__getattr__(head)(global_y[-1]) # (b*num_agent, 2, 112, 200)
+            if self.feat_mode == 'fused':
+                global_z[head+'_early'] = self.__getattr__(head)(global_y_early[-1])
+                global_z[head+'_fused'] = self.__getattr__(head)(global_y_fused[-1])
         global_z.update(z)
-        global_z['z'] = global_depth_weights_list[0]
+        if self.depth_mode == 'Weighted':
+            global_z['z'] = global_depth_weights_list[0]
         return [global_z]
     
     def forward(self, images, trans_mats, shift_mats, map_scale=1.0):
@@ -1670,7 +2019,7 @@ class DLASeg(nn.Module):
             return self.LocalCoord_forward(images, trans_mats)
         
 
-def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique'):
+def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter'):
     model = DLASeg('dla{}'.format(num_layers), heads,
                     pretrained=True,
                     down_ratio=down_ratio,
@@ -1681,6 +2030,7 @@ def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='N
                     trans_layer=trans_layer,
                     coord=coord,
                     warp_mode=warp_mode,
-                    depth_mode=depth_mode)
+                    depth_mode=depth_mode,
+                    feat_mode=feat_mode)
     return model
 

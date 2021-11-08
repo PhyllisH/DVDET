@@ -67,8 +67,8 @@ class MultiAgentDetector(BaseDetector):
         images = torch.from_numpy(images)
 
         meta_i = {'c': c, 's': s,
-                'out_height': inp_height // self.opt.down_ratio,
-                'out_width': inp_width // self.opt.down_ratio}
+                'out_height': inp_height // 4,
+                'out_width': inp_width // 4}
 
         c = np.array([352/(2*self.opt.map_scale), 192/(2*self.opt.map_scale)])
         s = np.array([352/(self.opt.map_scale), 192/(self.opt.map_scale)])
@@ -106,7 +106,7 @@ class MultiAgentDetector(BaseDetector):
             torch.cuda.synchronize()
             forward_time = time.time()
             if self.opt.coord == 'Local':
-                dets = dets = ctdet_decode(hm, wh, map_scale=None, shift_mats=None, reg=reg, angle=None, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+                dets = ctdet_decode(hm, wh, map_scale=None, shift_mats=None, reg=reg, angle=None, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
             elif self.opt.coord == 'Global':
                 dets = ctdet_decode(hm, wh, map_scale=self.opt.map_scale, shift_mats=shift_mats[0], reg=reg, angle=angle, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
             else:

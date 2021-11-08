@@ -264,7 +264,6 @@ class MultiAgentDetDataset(data.Dataset):
             draw_umich_gaussian
         draw_gaussian = draw_msra_gaussian
         # draw_gaussian = draw_umich_gaussian
-
         ##############################################################
         ###              Generate BEV GT Supervision               ###
         ##############################################################
@@ -518,6 +517,9 @@ class MultiAgentDetDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
+        # while len(sample['vehicles_i']) <= 5:
+        #     index = np.random.randint(low=0, high=len(self.samples)-1)
+        #     sample = self.samples[index]
         img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
         c, s, aug_imgs, trans_mats, trans_mats_n005, trans_mats_n010, \
             trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080, \

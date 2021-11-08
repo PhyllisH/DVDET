@@ -139,18 +139,18 @@ def UAVtoUAV(UAV_I1, T1, T2):
 #              'scene_85', 'scene_86', 'scene_89', 'scene_91', 'scene_93', 'scene_96',
 #              'scene_115', 'scene_117']
 
-train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 
-               'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
-               'scene_13', 'scene_14']
-val_split = [ 'scene_5']
+# train_split = ['scene_0', 'scene_1', 'scene_2', 'scene_3', 'scene_4', 
+#                'scene_6', 'scene_8', 'scene_9', 'scene_10', 'scene_11', 'scene_12',
+#                'scene_13', 'scene_14']
+# val_split = [ 'scene_5']
 
-# train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
-#                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
-#                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
-#                'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
-#                'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
+               'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
+               'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
+               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
+               'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
 
-# val_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
+val_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
 
 town_config = OrderedDict()
 town_config[0] = {
@@ -464,12 +464,12 @@ def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/'):
                 json.dump(annos, f)
 
 if __name__ == '__main__':
-    convert_multiview_coco(town_id=0, height=40)
+    # convert_multiview_coco(town_id=0, height=40)
     # convert_multiview_coco(town_id=1, height=40)
     # convert_multiview_coco(town_id=1, height=60)
     # convert_multiview_coco(town_id=1, height=80)
     # convert_multiview_coco(town_id=1, height=100)
-    # convert_multiview_coco(town_id=2, height=40)
+    convert_multiview_coco(town_id=2, height=40)
     # convert_multiview_coco(town_id=2, height=60)
     # convert_multiview_coco(town_id=2, height=80)
     # convert_multiview_coco()

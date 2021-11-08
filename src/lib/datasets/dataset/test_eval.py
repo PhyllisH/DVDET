@@ -103,6 +103,9 @@ def run_polygon_eval(anno_path_cocoformat, det_path_cocoformat):
     det_evalformat = toevalformat(det_evalformat)
     gt_evalformat = toevalformat(gt_evalformat)
 
+    print('####################### IOU 0.75 ####################### ')
+    eval_map(det_evalformat, gt_evalformat, iou_thr=0.75, mode='area', nproc=8)
+
     print('####################### IOU 0.5 ####################### ')
     eval_map(det_evalformat, gt_evalformat, iou_thr=0.5, mode='area', nproc=8)
     # eval_map(det_evalformat, gt_evalformat, iou_thr=0.5, mode='ap', nproc=8)

@@ -49,11 +49,13 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         #                     '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
         # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
         # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
-        self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+        # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
         # self.data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
-        # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
-        #                     '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
-        #                     '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
+        self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
+                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
+                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
+        if split == 'val':
+            self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
         # print('Data dir: {}'.format(self.data_dir))
         # self.img_dir = os.path.join(self.data_dir, 'images')
         self.img_dir = self.data_dir
@@ -166,6 +168,16 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                         img_dir.append(self.img_dir[i])
             self.samples = samples
             self.img_dir = img_dir
+            if split == 'train':
+                samples = []
+                img_dir = []
+                for i, sample in enumerate(self.samples):
+                    # print(len(sample['vehicles_i']))
+                    if len(sample['vehicles_i']) > 10:
+                        samples.append(sample)
+                        img_dir.append(self.img_dir[i])
+                self.samples = samples
+                self.img_dir = img_dir
             self.num_samples = len(self.samples)
         else:
             self.num_agents = int(opt.num_agents)
