@@ -17,6 +17,7 @@ import cv2
 import os
 import random
 import matplotlib.pyplot as plt
+from numpy.lib.ufunclike import isposinf
 from pyquaternion import Quaternion
 import pycocotools.coco as coco
 
@@ -103,7 +104,7 @@ def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
         image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
         image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
         image_up = vis_cam(image_u.copy(), annos)
-        image_up = vis_cam(image_up, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
+        # image_up = vis_cam(image_up, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
         image_gp = vis_cam_g(image_g, annos, sensor['translation'].copy(), sensor['rotation'].copy())
         image_gp = vis_cam_g(image_gp, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre)
     else:
@@ -112,7 +113,7 @@ def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
         sensor_type = sensor['image'].split('/')[1].split('_')[1]
         image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=with_rotat, sensor_type=sensor_type)
         image_up = vis_cam_g(image_u, annos, sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L', with_rotat=with_rotat, sensor_type=sensor_type)
-        image_up = vis_cam_g(image_up, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre, mode='G2L',  with_rotat=with_rotat, sensor_type=sensor_type)
+        # image_up = vis_cam_g(image_up, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre, mode='G2L',  with_rotat=with_rotat, sensor_type=sensor_type)
         image_gp = vis_cam(image_g.copy(), annos)
         image_gp = vis_cam(image_gp, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre)
 
@@ -156,22 +157,30 @@ def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, senso
     return img_warp
 
 def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1):
+    # image = np.ones_like(image) * 255
+    # image = np.array(image * 0.85, dtype=np.int32)
+    # alpha = np.ones([image.shape[0], image.shape[1], 1]) * 100
+    # image = np.concatenate([image, alpha], axis=-1)
+    # color = (255, 255, 255)
+    # color = (240, 32, 160)
+    thickness = 2 if list(color)[0]==0 else 3
     for anno in annos:
         if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
-            if 'bbox' in anno:
+            if 'corners' in anno:
+                polygon = np.array(anno['corners'][:8]).reshape([4,2])
+                # polygon = polygon * 4
+                # color = (240, 32, 160) if polygon[:,0].max() < 700 else (127, 255, 0)
+                image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
+            else:
                 bbox = anno['bbox']
                 if len(bbox) == 4:
-                    bbox = [x*4 for x in bbox]
+                    # bbox = [x*4 for x in bbox]
                     x, y, w, h = bbox
-                    image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, 1)
+                    image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, thickness)
                 else:
                     polygon = np.array(get_2d_polygon(np.array(bbox[:8]).reshape([4,2]).T)).reshape([4,2])
-                    polygon = polygon * 4
-                    image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
-            else:
-                polygon = np.array(anno['corners'][:8]).reshape([4,2])
-                polygon = polygon * 4
-                image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
+                    # polygon = polygon * 4
+                    image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
     return image
 
 def xywh2polygon(bbox):
@@ -205,7 +214,6 @@ def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=
             # print('x: {}-{}, y: {}-{}'.format(ori_image.nonzero()[1].min(), ori_image.nonzero()[1].max(), ori_image.nonzero()[0].min(), ori_image.nonzero()[0].max()))
             image = cv2.polylines(image, pts=np.int32([bbox_g.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=1)
     # cv2.imwrite('test.png', image)
-    # import ipdb; ipdb.set_trace()
     return image
 
 def vis_uav(images):
@@ -245,7 +253,13 @@ def visualize_result():
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_Baseline_MapScale2/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Baseline_Town5/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_V2V_MapScale2/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_BEVGT_40m_Town5_Baseline_NOMESSAGE_MapScale1/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/GlobalCoord_Inter_DADW_WeightedDepth/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/results_Local.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/results_BEV_Polygon.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Global_Town5.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Local_Town5.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Local.json')
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
     res_annos_all = json.load(open(result_path))
@@ -254,6 +268,7 @@ def visualize_result():
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
     if coord_mode == 'Global':
         coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global_crop.json'.format(40)))
+        # coco_ = coco.COCO( os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/gts_Global.json'))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances_global.json'))
         # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/train_instances_global.json'))

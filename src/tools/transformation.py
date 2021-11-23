@@ -138,7 +138,7 @@ def get_angle_polygon(polygon):
                         [np.sin(theta), np.cos(theta)]])
     out_points = np.matmul(corners - center, rotation) + center
     x, y = list(out_points[0, :])
-    w, h = list(out_points[2, :] - out_points[0, :])
+    w, h = [int(x) for x in list(out_points[2, :] - out_points[0, :])]
 
     # from matplotlib import pyplot as plt
     # from shapely.geometry.polygon import Polygon
@@ -175,7 +175,8 @@ def get_angle_polygon(polygon):
     # ax.set_aspect(1)
     # plt.savefig('trans_polygon.png')
     out_points = list(out_points.reshape(-1,))
-    return [x, y, w, h, np.sin(theta), np.cos(theta)], out_points
+    # return [x, y, w, h, np.sin(theta), np.cos(theta)], out_points
+    return [x, y, w, h, np.sin(theta), np.cos(theta)], list(corners.reshape(-1,))
 
 def global_points_to_image(global_points, translation, rotation, camera_intrinsic):
     """

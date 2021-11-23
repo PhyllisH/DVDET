@@ -447,12 +447,13 @@ def convert_multiview_coco(town_id=1, height=40):
         json.dump(ret_g_crop, open(out_global_crop_path, 'w'))
         pkl.dump(ret_s, open(out_sample_path, 'wb')) 
 
-def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/'):
+def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/', height=40):
     splits = ['train', 'val']
     for split in splits:
-        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances.json'.format(split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_instances_global.json'.format(split))
-        for anno_path in [out_path, out_global_path]:
+        out_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances_global.json'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/{}_{}_instances_global_crop.json'.format(height, split))
+        for anno_path in [out_path, out_global_path, out_global_crop_path]:
             with open(anno_path, 'r') as f:
                 annos = json.load(f)
             annos_noignore = []
@@ -460,7 +461,9 @@ def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/'):
                 if anno['ignore'] == 0:
                     annos_noignore.append(anno)
             annos['annotations'] = annos_noignore
-            with open(os.path.join(os.path.dirname(anno_path), os.path.basename(anno_path).split('.')[0]+'_woignoredbox.json'), 'w') as f:
+            save_path = os.path.join(os.path.dirname(anno_path), os.path.basename(anno_path).split('.')[0]+'_woignoredbox.json')
+            print(save_path)
+            with open(save_path, 'w') as f:
                 json.dump(annos, f)
 
 if __name__ == '__main__':
@@ -473,3 +476,13 @@ if __name__ == '__main__':
     # convert_multiview_coco(town_id=2, height=60)
     # convert_multiview_coco(town_id=2, height=80)
     # convert_multiview_coco()
+    # town_ids = [0,1,2]
+    # for town_id in town_ids:
+    #     if town_id == 0:
+    #         data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+    #     elif town_id == 1:
+    #         data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+    #     elif town_id == 2:
+    #         data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m'
+
+    #     pop_ignored_box(data_dir)
