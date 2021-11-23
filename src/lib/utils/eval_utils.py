@@ -88,14 +88,23 @@ def tpfp_default(det_bboxes,
     # a certain scale
     tp = np.zeros((num_scales, num_dets), dtype=np.float32)
     fp = np.zeros((num_scales, num_dets), dtype=np.float32)
-
+    
+    if len(det_bboxes) == 0:
+        fp[...] = 1
+        return tp, fp
+    
     # if there is no gt bboxes in this image, then all det bboxes
     # within area range are false positives
     if len(gt_bboxes) == 0:
         if area_ranges == [(None, None)]:
             fp[...] = 1
         else:
-            polygons = det_bboxes[:,:8].reshape(-1,4,2).transpose(0,2,1)
+            if len(det_bboxes.shape) == 2:
+                polygons = det_bboxes[:,:8].reshape(-1,4,2).transpose(0,2,1)
+            elif len(det_bboxes.shape) == 1:
+                polygons = det_bboxes[:8].reshape(-1,4,2).transpose(0,2,1)
+            else:
+                polygons = det_bboxes[0][0][:8].reshape(-1,4,2).transpose(0,2,1)
             h_w = np.sort(np.sqrt(np.square(polygons[:,:,1:] - polygons[:,:,0:1].repeat(3, axis=2)).sum(axis=1)), axis=-1)[:,:2]
             det_areas = h_w[:,0] * h_w[:,1]
             for i, (min_area, max_area) in enumerate(area_ranges):
@@ -111,11 +120,11 @@ def tpfp_default(det_bboxes,
     gt_corners = get_corners(gt_bboxes[:, :8].reshape(gt_bboxes.shape[0], 4, 2))
     pred_corners = get_corners(det_bboxes[:, :8].reshape(det_bboxes.shape[0], 4, 2))
 
-    # print(gt_corners.shape)
-    # print(pred_corners.shape)
+    # print('gt: ', gt_corners[0])
+    # print('pred: ', pred_corners[0])
 
-    gt_box = np.array([Polygon([(box[i,0], box[i,1]) for i in range(4)]) for box in gt_corners])
-    pred_box = np.array([Polygon([(box[i,0], box[i,1]) for i in range(4)]) for box in pred_corners])
+    gt_box = np.array([Polygon([(box[i,0], box[i,1]) for i in range(4)]).buffer(0.01) for box in gt_corners])
+    pred_box = np.array([Polygon([(box[i,0], box[i,1]) for i in range(4)]).buffer(0.01) for box in pred_corners])
     save_flag = False	
     # print('gt', gt_corners)
     # print('pred', pred_corners)
@@ -128,10 +137,11 @@ def tpfp_default(det_bboxes,
            box_iou = np.vstack((box_iou, iou))
 
     ious = box_iou.T
+    if len(ious.shape) < 2:
+        ious = ious[:,np.newaxis]
     # ious = bbox_overlaps(det_bboxes, gt_bboxes)
     # for each det, the max iou with all gts
     ious_max = ious.max(axis=1)
-
     # for each det, which gt overlaps most with it
     ious_argmax = ious.argmax(axis=1)
     # sort all dets in descending order by scores
@@ -170,7 +180,8 @@ def eval_map(det_results,
              annotations,
              iou_thr=0.5,
              mode='ap',
-             nproc=4):
+             nproc=4,
+             print_flag=True):
     """Evaluate mAP of a dataset.
     Args:
         det_results (list[list]): [[cls1_det, cls2_det, ...], ...].
@@ -187,7 +198,7 @@ def eval_map(det_results,
     Returns:
         tuple: (mAP, [dict, dict, ...])
     """
-    print(len(det_results), len(annotations))
+    # print(len(det_results), len(annotations))
     assert len(det_results) == len(annotations)
 
     num_imgs = len(det_results)
@@ -270,7 +281,8 @@ def eval_map(det_results,
                 aps.append(cls_result['ap'])
         mean_ap = np.array(aps).mean().item() if aps else 0.0
 
-    print_map_summary(mean_ap, eval_results, area_ranges)
+    if print_flag:
+        print_map_summary(mean_ap, eval_results, area_ranges)
 
     return mean_ap, eval_results
 

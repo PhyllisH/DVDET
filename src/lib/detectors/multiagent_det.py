@@ -75,6 +75,12 @@ class MultiAgentDetector(BaseDetector):
         meta = {'c': c, 's': s,
                 'out_height': 192/(self.opt.map_scale),
                 'out_width': 352/(self.opt.map_scale)}
+                
+        # c = np.array([128/(2*self.opt.map_scale), 96/(2*self.opt.map_scale)])
+        # s = np.array([128/(self.opt.map_scale), 96/(self.opt.map_scale)])
+        # meta = {'c': c, 's': s,
+        #         'out_height': 96/(self.opt.map_scale),
+        #         'out_width': 128/(self.opt.map_scale)}
         
         if self.opt.coord == 'Local':
             return images, meta_i
@@ -90,6 +96,8 @@ class MultiAgentDetector(BaseDetector):
             wh = output['wh']
             reg = output['reg'] if self.opt.reg_offset else None
             angle = output['angle'] if self.opt.polygon else None # (sin, cos)
+            z = output['z'] if 'z' in output else None
+            # import ipdb; ipdb.set_trace()
             if self.opt.coord == 'Joint':
                 hm_i = output['hm_i'].sigmoid_()
                 wh_i = output['wh_i']

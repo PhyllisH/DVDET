@@ -49,13 +49,17 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         #                     '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
         # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
         # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
-        # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
         # self.data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
+        # self.data_dir = '/DB/public/uav_dataset'
         self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
-        if split == 'val':
-            self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+        # if split == 'val':
+            # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+            # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+            # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
+            # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
+            #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']
         # print('Data dir: {}'.format(self.data_dir))
         # self.img_dir = os.path.join(self.data_dir, 'images')
         self.img_dir = self.data_dir
@@ -71,14 +75,14 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             if isinstance(self.data_dir, list):
                 # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
                 #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances.json'.format(opt.uav_height)))]            
+                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height)))]
+                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height)))]            
             else:
                 # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height))
-                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global_crop.json'.format(opt.uav_height))
-                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances.json'.format(opt.uav_height))
+                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height))
+                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height))
         else:
             # self.annot_path = os.path.join(
             #     self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
@@ -91,14 +95,14 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             if isinstance(self.data_dir, list):
                 # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)) \
                 #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances.json'.format(opt.uav_height)))]
+                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height)))]
+                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height)) \
+                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height)))]
             else:
                 # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height))
-                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_global_crop.json'.format(opt.uav_height))
-                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances.json'.format(opt.uav_height))
+                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height))
+                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height))
             
         self.max_objs = 128
         # self.class_name = [
@@ -150,6 +154,10 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                 self.samples.extend(cur_sample)
                 self.img_dir.extend([self.data_dir[i]]*len(cur_sample))
                 self.img_idx_mapping.append(cur_img_idx_mapping)
+                with open('gts.pkl', 'wb') as f:
+                    pkl.dump(self.samples, f)
+                with open('imgs_dir.pkl', 'wb') as f:
+                    pkl.dump(self.img_dir, f)
         self.num_samples = len(self.samples)
         print('Loaded {} {} samples'.format(split, self.num_samples))
         if 'NO_MESSAGE' in opt.message_mode:
@@ -229,22 +237,34 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.coco = coco.COCO(annot_path_cocoformat)
         else:
             annot_cocoformat = {'images': [], "type": "instances", 'annotations': []}
+            annot_g_cocoformat = {'images': [], "type": "instances", 'annotations': []}
             box_count = 0
-            for i, annot_path in enumerate(annot_path_cocoformat):
+            for i, (annot_path, annot_g_path) in enumerate(zip(self.annot_path_cocoformat_uav, self.annot_path_cocoformat)):
                 cur_sample = json.load(open(annot_path, 'r'))
-                for image in cur_sample['images']:
+                cur_g_sample = json.load(open(annot_g_path, 'r'))
+                for image, image_g in zip(cur_sample['images'], cur_g_sample['images']):
                     image['id'] = self.img_idx_mapping[i][image['id']]
-                for anno in cur_sample['annotations']:
+                    image_g['id'] = self.img_idx_mapping[i][image_g['id']]
+
+                for anno, anno_g in zip(cur_sample['annotations'], cur_g_sample['annotations']):
                     anno['image_id'] = self.img_idx_mapping[i][anno['image_id']]
+                    anno_g['image_id'] = self.img_idx_mapping[i][anno_g['image_id']]
                     anno['id'] = box_count
+                    anno_g['id'] = box_count
                     box_count += 1
                 
                 annot_cocoformat['categories'] = cur_sample['categories']
                 annot_cocoformat['images'].extend(cur_sample['images'])
                 annot_cocoformat['annotations'].extend(cur_sample['annotations'])
+
+                annot_g_cocoformat['categories'] = cur_g_sample['categories']
+                annot_g_cocoformat['images'].extend(cur_g_sample['images'])
+                annot_g_cocoformat['annotations'].extend(cur_g_sample['annotations'])
             
             with open('{}/gts_{}.json'.format(save_dir, eval_mode), 'w') as f:
                 json.dump(annot_cocoformat, f)
+            with open('{}/gts_{}.json'.format(save_dir, 'Global'), 'w') as f:
+                json.dump(annot_g_cocoformat, f)
             self.coco = coco.COCO('{}/gts_{}.json'.format(save_dir, eval_mode))
         
         save_path = '{}/results_{}.json'.format(save_dir, eval_mode)
@@ -268,12 +288,15 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             run_polygon_eval(annot_path_cocoformat, save_path)
         else:
             annot_cocoformat = {'images': [], "type": "instances", 'annotations': []}
+            box_count = 0
             for i, annot_path in enumerate(annot_path_cocoformat):
                 cur_sample = json.load(open(annot_path, 'r'))
                 for image in cur_sample['images']:
                     image['id'] = self.img_idx_mapping[i][image['id']]
                 for anno in cur_sample['annotations']:
                     anno['image_id'] = self.img_idx_mapping[i][anno['image_id']]
+                    anno['id'] = box_count
+                    box_count += 1
                 
                 annot_cocoformat['categories'] = cur_sample['categories']
                 annot_cocoformat['images'].extend(cur_sample['images'])

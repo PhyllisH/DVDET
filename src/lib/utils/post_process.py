@@ -5,6 +5,7 @@ from operator import le
 
 import numpy as np
 import copy
+from numpy.lib.arraysetops import isin
 from shapely.geometry import Polygon
 from .image import transform_preds
 from .ddd_utils import ddd2locrot
@@ -171,7 +172,17 @@ def compute_iou(box, boxes):
     """
     # Calculate intersection areas
     iou = [box.intersection(b).area / (box.union(b).area+1e-6) for b in boxes]
-
+    # iou = []
+    # for b in boxes:
+    #     try:
+    #         a = box.intersection(b)
+    #     except:
+    #         a = 0.0
+    #     if isinstance(a, float):
+    #         iou.append(a)
+    #     else:
+    #         iou.append(a.area / (box.union(b).area+1e-6))
+    #     print(iou)
     return np.array(iou, dtype=np.float32)
 
 def polygon_nms(detections, threshold):

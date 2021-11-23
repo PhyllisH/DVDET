@@ -518,22 +518,31 @@ def ctdet_decode(heat, wh, map_scale=1.0, shift_mats=None, reg=None, angle=None,
             bboxes = bboxes * map_scale # (batch, 3, K*2)
         detections = torch.cat([bboxes, scores, clses], dim=2)
     else:
-        bboxes = torch.cat([xs - wh[..., 0:1] / 2,
-                            ys - wh[..., 1:2] / 2,
-                            xs - wh[..., 0:1] / 2,
-                            ys + wh[..., 1:2] / 2,
-                            xs + wh[..., 0:1] / 2,
-                            ys + wh[..., 1:2] / 2,
-                            xs + wh[..., 0:1] / 2,
-                            ys - wh[..., 1:2] / 2], dim=2)
+        bboxes = torch.cat([- wh[..., 0:1] / 2,
+                            - wh[..., 1:2] / 2,
+                            -wh[..., 0:1] / 2,
+                            wh[..., 1:2] / 2,
+                            wh[..., 0:1] / 2,
+                            wh[..., 1:2] / 2,
+                            wh[..., 0:1] / 2,
+                            - wh[..., 1:2] / 2], dim=2)
         bboxes = bboxes.view(batch, K, 4, 2)
         bboxes = bboxes.view(batch*K, 4, 2)
         angle = _transpose_and_gather_feat(angle, inds)
         angle = angle.view(batch, K, 2)
         angle = angle.view(batch*K, 2)
         rot_bboxes = rotation_2d_torch(bboxes, angle)
-        rot_bboxes = rot_bboxes.view(batch, K, 4, 2).view(batch, K, 8)
+        rot_bboxes = rot_bboxes.view(batch, K, 4, 2)
+        rot_bboxes = rot_bboxes + torch.cat([xs,ys], dim=-1).unsqueeze(-2)
+        rot_bboxes = rot_bboxes.view(batch, K, 8)
         detections = torch.cat([rot_bboxes, scores, clses], dim=2)
+    
+    # if z is not None:
+    #     z = _transpose_and_gather_feat(z, inds)
+    #     z = z.view(batch, K, 9)
+    #     z_clses = z.max(dim=-1)[1].unsqueeze(-1)
+    #     detections = torch.cat([detections[:,:,:-1], z_clses], dim=2)
+
     return detections
 
 def rotation_2d_torch(points, angles):

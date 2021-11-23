@@ -101,18 +101,27 @@ class CtdetLoss(torch.nn.Module):
                 RegWeightedL1Loss() if opt.cat_spec_wh else self.crit_reg
         self.crit_z = ZFocalLoss()
         self.opt = opt
+        self.acc_z = 0.0
+        self.count = 0
+
+    def _acc_z(self, output_z, z, ind, reg_mask):
+        z_pred = _transpose_and_gather_feat(output_z, ind)
+        z_pred_cls = z_pred.argmax(-1)
+        z_cls = z.argmax(-1)
+        correct = ((z_pred_cls == z_cls)*1*reg_mask).sum().item()
+        amount = reg_mask.sum().item()
+        return correct/(amount+1e-6)
+
     
     def _angle_loss(self, output_angle, output_wh, output_reg, wh, reg, angle, reg_mask, ind):
-        def _get_corners(wh, reg, angle):
-            corners = wh.unsqueeze(2).expand(-1,-1,4,-1)
-            corners[:,:,0] = corners[:,:,0] * (-0.5)
-            corners[:,:,1,0] = corners[:,:,0,0] * (-0.5)
-            corners[:,:,1,1] = corners[:,:,0,0] * (0.5)
-            corners[:,:,2] = corners[:,:,3] * (0.5)
-            corners[:,:,3,0] = corners[:,:,0,0] * (0.5)
-            corners[:,:,3,1] = corners[:,:,0,0] * (-0.5)
+        weights = torch.Tensor([-0.5,-0.5,-0.5,0.5,0.5,0.5,0.5,-0.5]).to(output_angle.device)
+        weights = weights.reshape([4,2])
 
-            corners = corners + reg.unsqueeze(2)    # (b, k, 4, 2)q
+        def _get_corners(wh, reg, angle):
+            corners = wh.detach().unsqueeze(2).expand(-1,-1,4,-1)
+            cur_weights = weights.unsqueeze(0).expand(corners.shape[1],-1,-1).unsqueeze(0).expand(corners.shape[0],-1,-1,-1)
+            corners = corners * cur_weights
+            corners = corners + reg.detach().unsqueeze(2)    # (b, k, 4, 2)
             b, k, _ = angle.shape
             corners = corners.view(b*k, 4, 2)
             angle = angle.view(b*k, 2)
@@ -246,13 +255,15 @@ class CtdetLoss(torch.nn.Module):
                         z_loss += self.crit_z(
                             output['z'], batch['reg_mask'],
                             batch['ind'], batch['cat_depth']) / opt.num_stacks
+                        self.acc_z += self._acc_z(output['z'], batch['cat_depth'], batch['ind'], batch['reg_mask'])
+                        self.count += 1
             if opt.polygon and (opt.angle_weight > 0):
                 if opt.coord in ['Global', 'Joint']:
-                    # angle_loss += self.crit_reg(
-                    #         output['angle'], batch['reg_mask'],
-                    #         batch['ind'], batch['angle']) / opt.num_stacks
-                    angle_loss += self._angle_loss(output['angle'], output['wh'], output['reg'],
-                                                     batch['wh'], batch['reg'], batch['angle'], batch['reg_mask'], batch['ind'])
+                    angle_loss += self.crit_reg(
+                            output['angle'], batch['reg_mask'],
+                            batch['ind'], batch['angle']) / opt.num_stacks
+                    # angle_loss += self._angle_loss(output['angle'], output['wh'], output['reg'],
+                    #                                  batch['wh'], batch['reg'], batch['angle'], batch['reg_mask'], batch['ind'])
                     if opt.feat_mode == 'fused':
                         angle_loss_early += self.crit_reg(
                             output['angle_early'], batch['reg_mask'],
@@ -293,9 +304,10 @@ class CtdetLoss(torch.nn.Module):
                         opt.wh_weight * wh_loss_i + \
                         opt.off_weight * off_loss_i 
                 loss_stats.update({'loss': loss, 'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
-            if opt.depth_mode == 'Weighted':
+            if ('z' in output) and (opt.depth_mode == 'Weighted'):
                 loss = loss + opt.wh_weight * z_loss
                 loss_stats.update({'loss': loss, 'z_loss': z_loss})
+            print(self.acc_z/self.count)
         else:
             loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss 
             loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss}
@@ -314,6 +326,7 @@ class CtdetLoss(torch.nn.Module):
             if opt.depth_mode == 'Weighted':
                 loss = loss + opt.wh_weight * z_loss
                 loss_stats.update({'loss': loss, 'z_loss': z_loss})
+        # import ipdb; ipdb.set_trace()
         return loss, loss_stats
 
 

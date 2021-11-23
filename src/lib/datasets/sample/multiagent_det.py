@@ -93,10 +93,11 @@ class MultiAgentDetDataset(data.Dataset):
         out_corners = np.matmul(corners - center, rotation)
         out_points = out_corners + center
         x, y = list(out_points[0, :])
-        w, h = list(out_points[2, :] - out_points[0, :])
-        # print(h, w)
+        w, h = [abs(x) for x in list(out_points[2, :] - out_points[0, :])]
+        # print(h, w, theta)
+        # print(out_corners)
         # h, w = np.sort(np.sqrt(np.square(corners[1:] - corners[0:1].repeat(3, axis=0)).sum(axis=-1)), axis=-1)[:2]
-        # print(h, w)
+        # print(h, w, theta)
         # print([center[0], center[1], w, h, np.sin(tsheta), np.cos(theta)])
         return [center[0], center[1], w, h, np.sin(theta), np.cos(theta)]
 
@@ -195,7 +196,9 @@ class MultiAgentDetDataset(data.Dataset):
         scale = self.opt.map_scale
         depth_list = np.array([0, -1.0, -0.5, 0.5, 0.75, 1.0, 1.5, 2.0, 8.0])
         if num_images == 1:
-            images.append(cv2.imread(os.path.join(img_dir, sample[images_key])))
+            image = cv2.imread(os.path.join(img_dir, sample[images_key]))
+            # image = cv2.resize(image, (720, 480))
+            images.append(image)
             vehicles.append(sample[vehicles_key])
             category_idx.append(sample['category_id'])
             trans_mats_list.append(sample['trans_mat'])
@@ -269,6 +272,7 @@ class MultiAgentDetDataset(data.Dataset):
         ###              Generate BEV GT Supervision               ###
         ##############################################################
         output_h_bev, output_w_bev = int(192/scale), int(352/scale)
+        # output_h_bev, output_w_bev = int(96/scale), int(128/scale)
 
         num_classes = self.num_classes
         hm = np.zeros((num_images, num_classes, output_h_bev, output_w_bev), dtype=np.float32)
@@ -387,7 +391,7 @@ class MultiAgentDetDataset(data.Dataset):
                     ct = np.array(
                         [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2], dtype=np.float32)
                     ct_int = ct.astype(np.int32)
-                    # print(ct_int, h, w)
+                # print(ct_int, h, w)
                 if h > 0 and w > 0:
                     radius = gaussian_radius((math.ceil(h), math.ceil(w)), min_overlap=0.2)
                     radius = max(1, int(radius))
@@ -399,6 +403,7 @@ class MultiAgentDetDataset(data.Dataset):
                     # else:
                     draw_gaussian(hm[index, cls_id], ct_int, radius)
                     wh[index, k] = 1. * w, 1. * h
+                    # print(wh[index, k])
                     ind[index, k] = ct_int[1] * output_w_bev + ct_int[0]
                     reg[index, k] = ct - ct_int
                     reg_mask[index, k] = 1
@@ -518,9 +523,9 @@ class MultiAgentDetDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        # while len(sample['vehicles_i']) <= 5:
-        #     index = np.random.randint(low=0, high=len(self.samples)-1)
-        #     sample = self.samples[index]
+        while len(sample['vehicles_i']) <= 2:
+            index = np.random.randint(low=0, high=len(self.samples)-1)
+            sample = self.samples[index]
         img_dir = self.img_dir if isinstance(self.img_dir, str) else self.img_dir[index]
         c, s, aug_imgs, trans_mats, trans_mats_n005, trans_mats_n010, \
             trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080, \

@@ -27,7 +27,7 @@ from logger import Logger
 from utils.utils import AverageMeter
 from datasets.dataset_factory import dataset_factory
 from detectors.detector_factory import detector_factory
-
+import copy
 
 class PrefetchDataset(torch.utils.data.Dataset):
     def __init__(self, opt, dataset, pre_process_func):
@@ -98,14 +98,16 @@ class PrefetchDataset(torch.utils.data.Dataset):
         shift_mats_4 = np.concatenate([x[None,:,:] for x in shift_mats_4_list], axis=0)
         shift_mats_8 = np.concatenate([x[None,:,:] for x in shift_mats_8_list], axis=0)
         return images, image_idx, trans_mats, [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
-    
+
     def load_sample_func(self, index):
         info = self.samples[index]
         img_dir = self.img_dir[index] if len(self.img_dir) == len(self.samples) else self.img_dir
         images_key = 'image'
         images = []
         image_idx = []
-        images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
+        image = cv2.imread(os.path.join(img_dir, info[images_key]))
+        # image = cv2.resize(image, (720, 480))
+        images.append(image)
         image_idx.append(info['image_id'])
         trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]
         trans_mats_n010 = np.array(info['trans_mat_n010'], dtype=np.float32)[None,:,:]
