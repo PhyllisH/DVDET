@@ -271,8 +271,11 @@ class MultiAgentDetDataset(data.Dataset):
         ##############################################################
         ###              Generate BEV GT Supervision               ###
         ##############################################################
-        output_h_bev, output_w_bev = int(192/scale), int(352/scale)
-        # output_h_bev, output_w_bev = int(96/scale), int(128/scale)
+        if self.opt.real:
+            output_h_bev, output_w_bev = int(96/scale), int(128/scale)
+        else:
+            output_h_bev, output_w_bev = int(192/scale), int(352/scale)
+            
 
         num_classes = self.num_classes
         hm = np.zeros((num_images, num_classes, output_h_bev, output_w_bev), dtype=np.float32)

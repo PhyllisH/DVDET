@@ -106,7 +106,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
         images = []
         image_idx = []
         image = cv2.imread(os.path.join(img_dir, info[images_key]))
-        # image = cv2.resize(image, (720, 480))
+        if self.opt.real:
+            image = cv2.resize(image, (720, 480))
         images.append(image)
         image_idx.append(info['image_id'])
         trans_mats = np.array(info['trans_mat'], dtype=np.float32)[None,:,:]

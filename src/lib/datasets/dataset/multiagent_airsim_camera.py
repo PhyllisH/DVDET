@@ -37,32 +37,22 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
 
     def __init__(self, opt, split):
         super(MULTIAGENTAIRSIMCAM, self).__init__()
-        # self.data_dir = os.path.join(opt.data_dir, 'airsim_camera_10scene')
-        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15']
-        # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']
-        # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m']
-        # self.data_dir = '/DATA7_DB7/data/shfang/airsim_camera_seg_15'
-        # self.data_dir = ['/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
-        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15', \
-        #               '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
-        #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m', \
-        #                     '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
-        # self.data_dir = ['/DATA7_DB7/data/shfang/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
-        # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'] if opt.input_dir is '' else opt.input_dir
-        # self.data_dir = '/DATA5_DB8/data/public/airsim_camera/airsim_camera_10scene'
-        # self.data_dir = '/DB/public/uav_dataset'
-        self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
+
+        if opt.real:
+            self.data_dir = '/DB/public/uav_dataset'
+            self.img_dir = os.path.join(self.data_dir, 'images')
+        else:
+            self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
-        # if split == 'val':
-            # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
-            # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
-            # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
-            # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
-            #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']
-        # print('Data dir: {}'.format(self.data_dir))
-        # self.img_dir = os.path.join(self.data_dir, 'images')
-        self.img_dir = self.data_dir
+            if split == 'val':
+                self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+                # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+                # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
+                # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
+                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']    
+            self.img_dir = self.data_dir
+
         if split == 'val':
             # self.annot_path = os.path.join(
             #     self.data_dir, 'multiagent_annotations', 'val_instances_sample.pkl')
@@ -178,12 +168,16 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.img_dir = img_dir
             if split == 'train':
                 samples = []
-                img_dir = []
+                if isinstance(self.annot_path, str):
+                    img_dir = self.img_dir
+                else:
+                    img_dir = []
                 for i, sample in enumerate(self.samples):
                     # print(len(sample['vehicles_i']))
-                    if len(sample['vehicles_i']) > 10:
+                    if len(sample['vehicles_i']) > 10:  # keep samples which contains more than 10 vehicles
                         samples.append(sample)
-                        img_dir.append(self.img_dir[i])
+                        if not isinstance(self.annot_path, str):
+                            img_dir.append(self.img_dir[i])
                 self.samples = samples
                 self.img_dir = img_dir
             self.num_samples = len(self.samples)

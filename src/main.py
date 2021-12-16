@@ -30,7 +30,7 @@ def main(opt):
 
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
-    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode)
+    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape)
     optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
     if opt.load_model != '':
@@ -68,9 +68,6 @@ def main(opt):
     best = 1e10
     for epoch in range(start_epoch + 1, opt.num_epochs + 1):
         mark = epoch if opt.save_all else 'last'
-        with torch.no_grad():
-            log_dict_val, preds = trainer.val(epoch, val_loader)
-        import ipdb; ipdb.set_trace()
         log_dict_train, _ = trainer.train(epoch, train_loader)
         logger.write('epoch: {} |'.format(epoch))
         for k, v in log_dict_train.items():

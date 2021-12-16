@@ -520,7 +520,7 @@ def ctdet_decode(heat, wh, map_scale=1.0, shift_mats=None, reg=None, angle=None,
     else:
         bboxes = torch.cat([- wh[..., 0:1] / 2,
                             - wh[..., 1:2] / 2,
-                            -wh[..., 0:1] / 2,
+                            - wh[..., 0:1] / 2,
                             wh[..., 1:2] / 2,
                             wh[..., 0:1] / 2,
                             wh[..., 1:2] / 2,
@@ -558,8 +558,8 @@ def rotation_2d_torch(points, angles):
     rot_sin = angles[:,0]
     rot_cos = angles[:,1]
     rot_mat_T = torch.stack(
-        [stack([rot_cos, -rot_sin]),
-        stack([rot_sin, rot_cos])])
+        [stack([rot_cos, rot_sin]),
+        stack([-rot_sin, rot_cos])])
     return torch.einsum('aij,jka->aik', (points, rot_mat_T))
 
 

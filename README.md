@@ -1,60 +1,46 @@
-# Objects as Points
-Object detection, 3D detection, and pose estimation using center point detection:
-![](readme/fig2.png)
-> [**Objects as Points**](http://arxiv.org/abs/1904.07850),            
-> Xingyi Zhou, Dequan Wang, Philipp Kr&auml;henb&uuml;hl,        
-> *arXiv technical report ([arXiv 1904.07850](http://arxiv.org/abs/1904.07850))*         
+# Details
 
+### Args
+> exp_id: the path to save the models and logs
 
-Contact: [zhouxy@cs.utexas.edu](mailto:zhouxy@cs.utexas.edu). Any questions or discussions are welcomed! 
+> batch_size: the overall batch size
 
-## Updates
+> master_batch: the batch size of the master gpu (which maybe slightly smaller than the average batch size)
 
- - (June, 2020) We released a state-of-the-art Lidar-based 3D detection and tracking framework [CenterPoint](https://github.com/tianweiy/CenterPoint).
- - (April, 2020) We released a state-of-the-art (multi-category-/ pose-/ 3d-) tracking extension [CenterTrack](https://github.com/xingyizhou/CenterTrack).
+> num_agents: the agent amount of a single sample
 
-## Abstract 
+> lr: the learning rate
 
-Detection identifies objects as axis-aligned boxes in an image. Most successful object detectors enumerate a nearly exhaustive list of potential object locations and classify each. This is wasteful, inefficient, and requires additional post-processing. In this paper, we take a different approach. We model an object as a single point -- the center point of its bounding box. Our detector uses keypoint estimation to find center points and regresses to all other object properties, such as size, 3D location, orientation, and even pose. Our center point based approach, CenterNet, is end-to-end differentiable, simpler, faster, and more accurate than corresponding bounding box based detectors. CenterNet achieves the best speed-accuracy trade-off on the MS COCO dataset, with 28.1% AP at 142 FPS, 37.4% AP at 52 FPS, and 45.1% AP with multi-scale testing at 1.4 FPS. We use the same approach to estimate 3D bounding box in the KITTI benchmark and human pose on the COCO keypoint dataset. Our method performs competitively with sophisticated multi-stage methods and runs in real-time.
+> gpus: the visible gpus; 0,1,2,3
 
-## Highlights
+> num_epochs: the overall epoches
 
-- **Simple:** One-sentence method summary: use keypoint detection technic to detect the bounding box center point and regress to all other object properties like bounding box size, 3d information, and pose.
+> message_mode: NO_MESSAGE; this arg may be used in the collaborative setting
 
-- **Versatile:** The same framework works for object detection, 3d bounding box estimation, and multi-person pose estimation with minor modification.
+> uav_height: the altitude of the drone used to colllect dataset, used to chose dataset; could be 40/60/80
 
-- **Fast:** The whole process in a single network feedforward. No NMS post processing is needed. Our DLA-34 model runs at *52* FPS with *37.4* COCO AP.
+> map_scale: the default value is 1.0, which means the resolution of the BEV feature map is 0.25m/pixel
 
-- **Strong**: Our best single model achieves *45.1*AP on COCO test-dev.
+> trans_layer: the layer of the feature map where collaboration operated; -2 means no collaboration
 
-- **Easy to use:** We provide user friendly testing API and webcam demos.
+> coord: the coordinate of object detection; Global means the BEV coordinate, Local means the image/camera coordinate; Joint means both BEV and Image coordinate
 
-## Main results
+> warp_mode: the method to transform feature/image to the BEV coordinate; HW means hard warping which transforms based on the projection matrix; DW means deformable warping which tranforms based on the residual of the projection matrix and the learnable deformable offsets; DADW means a distance-aware deformable warping which considers the geometric prior: the coordinates of the pixels; since the offset of the near pixels should be smaller than the far-away ones
 
-### Object Detection on COCO validation
+> depth_mode: the BEV feature map could be generated considering all the possible altitudes or only the ground plane whose altitude equals to zerop; the corresponding modes are Weighted and Unique
 
-| Backbone     |  AP / FPS | Flip AP / FPS|  Multi-scale AP / FPS |
-|--------------|-----------|--------------|-----------------------|
-|Hourglass-104 | 40.3 / 14 | 42.2 / 7.8   | 45.1 / 1.4            |
-|DLA-34        | 37.4 / 52 | 39.2 / 28    | 41.7 / 4              |
-|ResNet-101    | 34.6 / 45 | 36.2 / 25    | 39.3 / 4              |
-|ResNet-18     | 28.1 / 142| 30.0 / 71    | 33.2 / 12             |
+> polygon: the object representation could be rotated rectangle or axis-aligned rectangle
 
-### Keypoint detection on COCO validation
+### Train
+~~~
+CUDA_VISIBLE_DEVICES=GPU_ID python main.py multiagent_det --exp_id EXP_DIR --batch_size=BATCH_SIZE --master_batch=MASTER_BATCH_SIZE --num_agents=NUM_AGENTS --lr=LR --gpus GPU_ID --num_epochs EPOCHS --message_mode=NO_MESSAGE --uav_height=40 --map_scale=1.0 --trans_layer -2 --coord=Global/Local/Joint --feat_mode=FEAT_MODE --warp_mode=DW/HW/DADW --depth_mode=Weighted/Unique --polygon
+~~~
 
-| Backbone     |  AP       |  FPS         |
-|--------------|-----------|--------------|
-|Hourglass-104 | 64.0      |    6.6       |
-|DLA-34        | 58.9      |    23        |
+### Inference
+~~~
+CUDA_VISIBLE_DEVICES=GPU_ID python multiagent_test.py multiagent_det --exp_id EXP_DIR --load_model MODEL_DIR --gpus GPU_ID  --message_mode=NO_MESSAGE --uav_height=40 --map_scale=1.0 --trans_layer -2 --coord=Global/Local/Joint --feat_mode=FEAT_MODE  --warp_mode=DW/HW/DADW --depth_mode=Weighted/Unique --polygon
+~~~
 
-### 3D bounding box detection on KITTI validation
-
-|Backbone|FPS|AP-E|AP-M|AP-H|AOS-E|AOS-M|AOS-H|BEV-E|BEV-M|BEV-H| 
-|--------|---|----|----|----|-----|-----|-----|-----|-----|-----|
-|DLA-34  |32 |96.9|87.8|79.2|93.9 |84.3 |75.7 |34.0 |30.5 |26.8 |
-
-
-All models and details are available in our [Model zoo](readme/MODEL_ZOO.md).
 
 ## Installation
 
@@ -69,61 +55,6 @@ First, download the models (By default, [ctdet_coco_dla_2x](https://drive.google
 from the [Model zoo](readme/MODEL_ZOO.md) and put them in `CenterNet_ROOT/models/`.
 
 For object detection on images/ video, run:
-
-~~~
-python demo.py ctdet --demo /path/to/image/or/folder/or/video --load_model ../models/ctdet_coco_dla_2x.pth
-~~~
-We provide example images in `CenterNet_ROOT/images/` (from [Detectron](https://github.com/facebookresearch/Detectron/tree/master/demo)). If set up correctly, the output should look like
-
-<p align="center"> <img src='readme/det1.png' align="center" height="230px"> <img src='readme/det2.png' align="center" height="230px"> </p>
-
-For webcam demo, run     
-
-~~~
-python demo.py ctdet --demo webcam --load_model ../models/ctdet_coco_dla_2x.pth
-~~~
-
-Similarly, for human pose estimation, run:
-
-~~~
-python demo.py multi_pose --demo /path/to/image/or/folder/or/video/or/webcam --load_model ../models/multi_pose_dla_3x.pth
-~~~
-The result for the example images should look like:
-
-<p align="center">  <img src='readme/pose1.png' align="center" height="200px"> <img src='readme/pose2.png' align="center" height="200px"> <img src='readme/pose3.png' align="center" height="200px">  </p>
-
-You can add `--debug 2` to visualize the heatmap outputs.
-You can add `--flip_test` for flip test.
-
-To use this CenterNet in your own project, you can 
-
-~~~
-import sys
-CENTERNET_PATH = /path/to/CenterNet/src/lib/
-sys.path.insert(0, CENTERNET_PATH)
-
-from detectors.detector_factory import detector_factory
-from opts import opts
-
-MODEL_PATH = /path/to/model
-TASK = 'ctdet' # or 'multi_pose' for human pose estimation
-opt = opts().init('{} --load_model {}'.format(TASK, MODEL_PATH).split(' '))
-detector = detector_factory[opt.task](opt)
-
-img = image/or/path/to/your/image/
-ret = detector.run(img)['results']
-~~~
-`ret` will be a python dict: `{category_id : [[x1, y1, x2, y2, score], ...], }`
-
-## Benchmark Evaluation and Training
-
-After [installation](readme/INSTALL.md), follow the instructions in [DATA.md](readme/DATA.md) to setup the datasets. Then check [GETTING_STARTED.md](readme/GETTING_STARTED.md) to reproduce the results in the paper.
-We provide scripts for all the experiments in the [experiments](experiments) folder.
-
-## Develop
-
-If you are interested in training CenterNet in a new dataset, use CenterNet in a new task, or use a new network architecture for CenterNet, please refer to [DEVELOP.md](readme/DEVELOP.md). Also feel free to send us emails for discussions or suggestions.
-
 ## Third-party resources
 
 - CenterNet + embedding learning based tracking: [FairMOT](https://github.com/ifzhang/FairMOT) from [Yifu Zhang](https://github.com/ifzhang).

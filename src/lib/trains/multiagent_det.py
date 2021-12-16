@@ -101,15 +101,15 @@ class CtdetLoss(torch.nn.Module):
                 RegWeightedL1Loss() if opt.cat_spec_wh else self.crit_reg
         self.crit_z = ZFocalLoss()
         self.opt = opt
-        self.acc_z = 0.0
+        self.acc_z = []
         self.count = 0
 
     def _acc_z(self, output_z, z, ind, reg_mask):
         z_pred = _transpose_and_gather_feat(output_z, ind)
         z_pred_cls = z_pred.argmax(-1)
         z_cls = z.argmax(-1)
-        correct = ((z_pred_cls == z_cls)*1*reg_mask).sum().item()
-        amount = reg_mask.sum().item()
+        correct = ((z_pred_cls == z_cls)*1*reg_mask).sum()
+        amount = reg_mask.sum()
         return correct/(amount+1e-6)
 
     
@@ -147,6 +147,7 @@ class CtdetLoss(torch.nn.Module):
         hm_loss_fused, wh_loss_fused, off_loss_fused, angle_loss_fused = 0, 0, 0, 0
         hm_loss_i, wh_loss_i, off_loss_i = 0, 0, 0
         z_loss = 0
+        acc_z = 0
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
@@ -255,8 +256,7 @@ class CtdetLoss(torch.nn.Module):
                         z_loss += self.crit_z(
                             output['z'], batch['reg_mask'],
                             batch['ind'], batch['cat_depth']) / opt.num_stacks
-                        self.acc_z += self._acc_z(output['z'], batch['cat_depth'], batch['ind'], batch['reg_mask'])
-                        self.count += 1
+                        acc_z += self._acc_z(output['z'], batch['cat_depth'], batch['ind'], batch['reg_mask'])
             if opt.polygon and (opt.angle_weight > 0):
                 if opt.coord in ['Global', 'Joint']:
                     angle_loss += self.crit_reg(
@@ -306,8 +306,8 @@ class CtdetLoss(torch.nn.Module):
                 loss_stats.update({'loss': loss, 'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
             if ('z' in output) and (opt.depth_mode == 'Weighted'):
                 loss = loss + opt.wh_weight * z_loss
-                loss_stats.update({'loss': loss, 'z_loss': z_loss})
-            print(self.acc_z/self.count)
+                loss_stats.update({'loss': loss, 'z_loss': z_loss, 'acc_z': acc_z})
+                self.acc_z.append(acc_z)
         else:
             loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss 
             loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss}
@@ -325,8 +325,8 @@ class CtdetLoss(torch.nn.Module):
                 loss_stats.update({'loss': loss,'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
             if opt.depth_mode == 'Weighted':
                 loss = loss + opt.wh_weight * z_loss
-                loss_stats.update({'loss': loss, 'z_loss': z_loss})
-        # import ipdb; ipdb.set_trace()
+                loss_stats.update({'loss': loss, 'z_loss': z_loss, 'acc_z': acc_z})
+                self.acc_z.append(acc_z)
         return loss, loss_stats
 
 
@@ -340,7 +340,7 @@ class MultiAgentDetTrainer(BaseTrainer):
             loss_states.extend(['hm_loss_early', 'wh_loss_early', 'off_loss_early', \
                             'hm_loss_fused', 'wh_loss_fused', 'off_loss_fused'])
         if opt.depth_mode == 'Weighted':
-            loss_states.append('z_loss')
+            loss_states.extend(['z_loss', 'acc_z'])
         if opt.polygon and (opt.angle_weight > 0):
             loss_states.append('angle_loss')
             if opt.feat_mode == 'fused':

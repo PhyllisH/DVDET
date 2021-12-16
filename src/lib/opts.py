@@ -260,6 +260,9 @@ class opts(object):
         self.parser.add_argument('--gpu_chunk_size', default=None,
                                  help='early | inter | fused')
         
+        self.parser.add_argument('--real', action='store_true',
+                                 help='load real dataset')
+        
 
     def parse(self, args=''):
         if args == '':
@@ -327,7 +330,12 @@ class opts(object):
         return opt
 
     def update_dataset_info_and_set_heads(self, opt, dataset):
-        input_h, input_w = dataset.default_resolution
+        if opt.real:
+            input_h, input_w = 480, 736
+        else:
+            input_h, input_w = dataset.default_resolution
+        
+        opt.feat_shape = [96, 128] if opt.real else [192, 352]
         opt.mean, opt.std = dataset.mean, dataset.std
         opt.num_classes = dataset.num_classes
 
