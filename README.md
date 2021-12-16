@@ -31,6 +31,8 @@
 
 > polygon: the object representation could be rotated rectangle or axis-aligned rectangle
 
+> real: if set true, the model would be trained on the real dataset, otherwise the virtual dataset
+
 ### Train
 ~~~
 CUDA_VISIBLE_DEVICES=GPU_ID python main.py multiagent_det --exp_id EXP_DIR --batch_size=BATCH_SIZE --master_batch=MASTER_BATCH_SIZE --num_agents=NUM_AGENTS --lr=LR --gpus GPU_ID --num_epochs EPOCHS --message_mode=NO_MESSAGE --uav_height=40 --map_scale=1.0 --trans_layer -2 --coord=Global/Local/Joint --feat_mode=FEAT_MODE --warp_mode=DW/HW/DADW --depth_mode=Weighted/Unique --polygon

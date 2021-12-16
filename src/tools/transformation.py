@@ -138,7 +138,7 @@ def get_angle_polygon(polygon):
                         [np.sin(theta), np.cos(theta)]])
     out_points = np.matmul(corners - center, rotation) + center
     x, y = list(out_points[0, :])
-    w, h = [int(x) for x in list(out_points[2, :] - out_points[0, :])]
+    w, h = [abs(x) for x in list(out_points[2, :] - out_points[0, :])]
 
     # from matplotlib import pyplot as plt
     # from shapely.geometry.polygon import Polygon
