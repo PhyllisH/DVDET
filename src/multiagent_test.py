@@ -65,6 +65,14 @@ class PrefetchDataset(torch.utils.data.Dataset):
         images_key = 'image'
         images = []
         trans_mat_list = []
+        trans_mats_n010_list = []
+        trans_mats_n005_list = []
+        trans_mats_p005_list = []
+        trans_mats_p007_list = []
+        trans_mats_p010_list = []
+        trans_mats_p015_list = []
+        trans_mats_p020_list = []
+        trans_mats_p080_list = []
         shift_mats_1_list = []
         shift_mats_2_list = []
         shift_mats_4_list = []
@@ -85,19 +93,39 @@ class PrefetchDataset(torch.utils.data.Dataset):
             # elif cam.startswith('F'):
             # elif cam.endswith(str(cam_id)):
             if cam in cam_list:
-                images.append(cv2.imread(os.path.join(img_dir, info[images_key])))
+                image = cv2.imread(os.path.join(img_dir, info[images_key]))
+                if self.opt.real:
+                    image = cv2.resize(image, (720, 480))
+                images.append(image)
                 image_idx.append(info['image_id'])
                 trans_mat_list.append(np.array(info['trans_mat'], dtype=np.float32))
+                trans_mats_n010_list.append(np.array(info['trans_mat_n010'], dtype=np.float32))
+                trans_mats_n005_list.append(np.array(info['trans_mat_n005'], dtype=np.float32))
+                trans_mats_p005_list.append(np.array(info['trans_mat_p005'], dtype=np.float32))
+                trans_mats_p007_list.append(np.array(info['trans_mat_p007'], dtype=np.float32))
+                trans_mats_p010_list.append(np.array(info['trans_mat_p010'], dtype=np.float32))
+                trans_mats_p015_list.append(np.array(info['trans_mat_p015'], dtype=np.float32))
+                trans_mats_p020_list.append(np.array(info['trans_mat_p020'], dtype=np.float32))
+                trans_mats_p080_list.append(np.array(info['trans_mat_p080'], dtype=np.float32))
                 shift_mats_1_list.append(np.array(info['shift_mats'][1*self.opt.map_scale], dtype=np.float32))
                 shift_mats_2_list.append(np.array(info['shift_mats'][2*self.opt.map_scale], dtype=np.float32))
                 shift_mats_4_list.append(np.array(info['shift_mats'][4*self.opt.map_scale], dtype=np.float32))
                 shift_mats_8_list.append(np.array(info['shift_mats'][8*self.opt.map_scale], dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
+        trans_mats_n010 = np.concatenate([x[None,:,:] for x in trans_mats_n010_list], axis=0)
+        trans_mats_n005 = np.concatenate([x[None,:,:] for x in trans_mats_n005_list], axis=0)
+        trans_mats_p005 = np.concatenate([x[None,:,:] for x in trans_mats_p005_list], axis=0)
+        trans_mats_p007 = np.concatenate([x[None,:,:] for x in trans_mats_p007_list], axis=0)
+        trans_mats_p010 = np.concatenate([x[None,:,:] for x in trans_mats_p010_list], axis=0)
+        trans_mats_p015 = np.concatenate([x[None,:,:] for x in trans_mats_p015_list], axis=0)
+        trans_mats_p020 = np.concatenate([x[None,:,:] for x in trans_mats_p020_list], axis=0)
+        trans_mats_p080 = np.concatenate([x[None,:,:] for x in trans_mats_p080_list], axis=0)
         shift_mats_1 = np.concatenate([x[None,:,:] for x in shift_mats_1_list], axis=0)
         shift_mats_2 = np.concatenate([x[None,:,:] for x in shift_mats_2_list], axis=0)
         shift_mats_4 = np.concatenate([x[None,:,:] for x in shift_mats_4_list], axis=0)
         shift_mats_8 = np.concatenate([x[None,:,:] for x in shift_mats_8_list], axis=0)
-        return images, image_idx, trans_mats, [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
+        return images, image_idx, [trans_mats, trans_mats_n010, trans_mats_n005, trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080],\
+                        [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
 
     def load_sample_func(self, index):
         info = self.samples[index]

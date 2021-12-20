@@ -89,7 +89,7 @@ def main(opt):
             save_model(os.path.join(opt.save_dir, 'model_last.pth'),
                        epoch, model, optimizer)
         logger.write('\n')
-        if (epoch in opt.lr_step) or (epoch%10==0):
+        if (epoch in opt.lr_step) or (epoch%20==0):
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
             if epoch in opt.lr_step:

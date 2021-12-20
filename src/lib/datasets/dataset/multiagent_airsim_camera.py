@@ -50,50 +50,29 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
                 # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
-                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']    
+                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2',
+                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/']    
             self.img_dir = self.data_dir
 
-        if split == 'val':
-            # self.annot_path = os.path.join(
-            #     self.data_dir, 'multiagent_annotations', 'val_instances_sample.pkl')
-            if isinstance(self.data_dir, list):
-                self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height)) \
-                                    for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height)))]
-            else:
-                self.annot_path = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(opt.uav_height))
-            
-            if isinstance(self.data_dir, list):
-                # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
-                #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height)))]            
-            else:
-                # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height))
-                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global_crop_woignoredbox.json'.format(opt.uav_height))
-                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_woignoredbox.json'.format(opt.uav_height))
+        if isinstance(self.data_dir, list):
+            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split)) \
+                                for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split)))]
         else:
-            # self.annot_path = os.path.join(
-            #     self.data_dir, 'multiagent_annotations', 'train_instances_sample.pkl')
-            if isinstance(self.data_dir, list):
-                self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height)) \
-                                    for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height)))]
-            else:
-                self.annot_path = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_sample.pkl'.format(opt.uav_height))
-            
-            if isinstance(self.data_dir, list):
-                # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)) \
-                #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height)))]
-                self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height)) \
-                                                    for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height)))]
-            else:
-                # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_global.json'.format(opt.uav_height))
-                self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_global_crop_woignoredbox.json'.format(opt.uav_height))
-                self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_train_instances_woignoredbox.json'.format(opt.uav_height))
-            
+            self.annot_path = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split))
+        
+        tail = '' if opt.with_occluded else '_woignoredbox'
+        if isinstance(self.data_dir, list):
+            # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
+            #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
+            self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail)) \
+                                                for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail)))]
+            self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail)) \
+                                                for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail)))]
+        else:
+            # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height))
+            self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail))
+            self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail))
+
         self.max_objs = 128
         # self.class_name = [
         #     'car', 'car_overlook']
