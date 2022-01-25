@@ -117,7 +117,9 @@ def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
         image_gp = vis_cam(image_g.copy(), annos, scale=scale_h)
         image_gp = vis_cam(image_gp, res_annos, color=(0, 0, 255), vis_thre=vis_score_thre, scale=scale_h)
 
-    return image_up, image_gp
+        image_global = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G', with_rotat=False, sensor_type=sensor_type)
+
+    return image_up, image_gp, image_global
 
 def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, sensor_type='BOTTOM'):
     """
@@ -129,10 +131,14 @@ def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, senso
     :return: img_warp <h, w, c> 
     """
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    if with_rotat:
+        world_mat = worldgrid2worldcoord_mat
+    else:
+        world_mat = default_worldgrid2worldcoord_mat
     project_mat = get_imgcoord2worldgrid_matrices(translation.copy(),
                                                       rotation.copy(),
                                                       camera_intrinsic,
-                                                      worldgrid2worldcoord_mat)
+                                                      world_mat)
     
     # project_mat2 = get_imgcoord_matrices(translation.copy(),
     #                                                   rotation.copy(),
@@ -148,9 +154,14 @@ def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, senso
         rotat_mat = get_crop_shift_mat(translation.copy(), rotation.copy(), sensor_type, map_scale_w, map_scale_h, world_X_left, world_Y_left)
         trans_mat = rotat_mat@trans_mat
     data = kornia.image_to_tensor(image, keepdim=False)
+
+    if with_rotat:
+        dsize = image_size
+    else:
+        dsize = (500, 500)
     data_warp = kornia.warp_perspective(data.float(),
                                         torch.tensor(trans_mat).repeat([1, 1, 1]).float(),
-                                        dsize=image_size)
+                                        dsize=dsize)
 
     # convert back to numpy
     img_warp = kornia.tensor_to_image(data_warp.byte())
@@ -165,7 +176,8 @@ def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1, scale=1):
     # color = (240, 32, 160)
     thickness = 1
     for anno in annos:
-        if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+        # if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+        if (anno.get('score', 0) > vis_thre):
             if 'corners' in anno:
                 polygon = np.array(anno['corners'][:8]).reshape([4,2])
                 polygon = polygon * scale
@@ -194,7 +206,8 @@ def xywh2polygon(bbox):
 def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=-1, mode='L2G', with_rotat=with_rotat, sensor_type='BOTTOM'):
     # ori_image = image.copy().mean(axis=-1)
     for anno in annos:
-        if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+        # if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+        if (anno.get('score', 0) > vis_thre):
             if 'bbox' in anno:
                 bbox = anno['bbox']
                 if len(bbox) == 4:
@@ -263,6 +276,7 @@ def visualize_result():
 
     # COLLABORATION
     result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/NO_MESSAGE/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/V2V/results_Global.json')
 
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
@@ -295,6 +309,7 @@ def visualize_result():
     for sample_id, sample in enumerate(samples):
         images_up = {}
         images_gp = {}
+        images_global = {}
         for k, sensor in sample.items():
             if k.startswith('vehicles'):
                 continue
@@ -303,10 +318,11 @@ def visualize_result():
                     sample_save_path = os.path.join(save_path, '{}'.format(sample_id))
                     if not os.path.exists(sample_save_path):
                         os.makedirs(sample_save_path)
-                    image_up, image_gp = vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, coord_mode)
+                    image_up, image_gp, image_global = vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, coord_mode)
                     if image_up is not None:
                         images_up[k] = image_up
                         images_gp[k] = image_gp
+                        images_global[k] = image_global
         uavs = set([x.split('_')[-1] for x in images_up])
         cams = set([x.split('_')[0] for x in images_up])
         uav_images = {}
@@ -321,8 +337,8 @@ def visualize_result():
                 # cur_uav_g[cam] = CoordTrans(ori_images[cam_name].copy(), translations[cam_name].copy(), rotations[cam_name].copy())
                 # cur_uav_g[cam] = vis_cam_g(cur_uav_g[cam], box_annos[cam_name], translations[cam_name].copy(), rotations[cam_name].copy())
                 # cur_uav_g[cam] = vis_cam_g(cur_uav_g[cam], res_box_annos[cam_name], translations[cam_name].copy(), rotations[cam_name].copy(), color=(0, 0, 255), vis_thre=vis_score_thre)
-                cur_uav_g[cam] = images_gp[cam_name]
-                cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam_name), cur_uav_g[cam])
+                cur_uav_g[cam] = images_global[cam_name]
+                cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam_name), images_gp[cam_name])
                 # # vis original
                 # ori_img = images[cam_name]
                 # cv2.imwrite('ori.png', ori_img)
@@ -341,6 +357,28 @@ def visualize_result():
         sample_image_g = np.concatenate([x[None,:,:,:] for _, x in uav_images_g.items()], axis=0).max(axis=0)
         cv2.imwrite('{}/pred_g.png'.format(sample_save_path, uav), sample_image_g)
         # import ipdb; ipdb.set_trace()
+
+        for cam in cams:
+            cur_cam_g = {}
+            for uav in uavs:
+                cam_name = '{}_{}'.format(cam, uav)
+                cur_cam_g[uav] = images_global[cam_name]
+            cam_g = np.concatenate([x[None,:,:,:] for _, x in cur_cam_g.items()], axis=0).max(axis=0)
+            cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam), cam_g)
+
+        # cam_images = {}
+        # cam_images_g = {}
+        # padding = np.ones([450,20,3], dtype=np.uint8) * 255
+        # padding_g = np.ones([768,20,3], dtype=np.uint8) * 255
+        # for cam in cams:
+        #     cur_cam = [np.concatenate([x,padding], axis=1) for cam_name, x in images_up.items() if cam in cam_name]
+        #     cur_cam_g = [np.concatenate([x,padding_g], axis=1) for cam_name, x in images_gp.items() if cam in cam_name]
+        #     # cur_cam_g = [x for cam_name, x in images_gp.items() if cam in cam_name]
+        #     cam_images[cam] = np.concatenate(cur_cam, axis=1)
+        #     cv2.imwrite('{}/{}_pred.png'.format(sample_save_path, cam), cam_images[cam])
+        #     # cam_images_g[cam] = np.concatenate([x[None,:,:,:] for x in cur_cam_g], axis=0).max(axis=0)
+        #     cam_images_g[cam] = np.concatenate(cur_cam_g, axis=1)
+        #     cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam), cam_images_g[cam])
 
     # Vis Image
     # for img_id in imgIds[:100]:

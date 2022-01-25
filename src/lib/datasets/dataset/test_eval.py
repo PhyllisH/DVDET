@@ -279,9 +279,9 @@ if __name__ == '__main__':
     # det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/GlobalCoord_Inter_DADW_WeightedDepth_Revised/results_Global.json'
     # run_polygon_eval(anno_path_cocoformat, det_path_cocoformat)
 
-    anno_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/gts_Global.json'
-    det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Global.json'
-    # split_accord_dis(anno_path_cocoformat, det_path_cocoformat)
+    # anno_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/gts_Global.json'
+    # det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Global.json'
+    # # split_accord_dis(anno_path_cocoformat, det_path_cocoformat)
 
     # anno_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/GlobalCoord_Inter_HW_WeightedDepth_RevisedZ/gts_Global.json'
     # det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/GlobalCoord_Inter_HW_WeightedDepth_RevisedZ/results_Global.json'
@@ -294,4 +294,9 @@ if __name__ == '__main__':
     # anno_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/GlobalCoord_Inter_DADW_WeightedDepth_Revised/gts_Global.json'
     # det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/GlobalCoord_Inter_DADW_WeightedDepth_Revised/results_Global.json'
     # split_accord_dis(anno_path_cocoformat, det_path_cocoformat)
-    run_polygon_eval(anno_path_cocoformat, det_path_cocoformat)
+    
+    anno_path_cocoformat = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15/multiagent_annotations/40_val_instances_global_crop.json'
+    # det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/V2V/results_Global.json'
+    det_path_cocoformat = '/GPFS/data/yhu/code/BEV_Det/CoDet/exp/multiagent_det/NO_MESSAGE/results_Global.json'
+    split_accord_dis(anno_path_cocoformat, det_path_cocoformat)
+    # run_polygon_eval(anno_path_cocoformat, det_path_cocoformat)

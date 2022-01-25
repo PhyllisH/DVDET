@@ -61,6 +61,7 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.annot_path = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split))
         
         tail = '' if opt.with_occluded else '_woignoredbox'
+        # tail = '_ignoredbox' if opt.with_occluded else '_woignoredbox'
         if isinstance(self.data_dir, list):
             # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
             #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
