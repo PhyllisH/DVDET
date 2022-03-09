@@ -10,10 +10,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 import imp
+from locale import CHAR_MAX
+from operator import index
+from torchvision.ops import nms
 
 import os
 import math
 import logging
+import time
 import ipdb
 from kornia.geometry.epipolar.projection import depth
 from kornia.geometry.transform.imgwarp import warp_affine
@@ -942,6 +946,7 @@ class DLASeg(nn.Module):
                 self.__setattr__('dropout0_'+str(c_layer), dropout0)
                 self.__setattr__('dropout1_'+str(c_layer), dropout1)
                 self.__setattr__('dropout2_'+str(c_layer), dropout2)
+        self.vis = False
     
     
     def add_coord_map(self, input, normalized=True):
@@ -990,22 +995,49 @@ class DLASeg(nn.Module):
         elif len(x.shape) == 6:
             x = x + pos[None,None,None,:,:,:]
         return x
+    
+    def mul_quality_map(self, x):
+        mask = torch.zeros([x.shape[-2], x.shape[-1]], dtype=torch.bool, device=x.device)
+        not_mask = ~mask
+        y_embed = not_mask.cumsum(0, dtype=torch.float32)
+        x_embed = not_mask.cumsum(1, dtype=torch.float32)
 
-    def get_colla_feats(self, x, shift_mats, with_pos=False):
+        x_c = x.shape[-1] // 2
+        y_c = x.shape[-2]
+
+        dis = (((x_embed[:, :] - x_c)/x_c) ** 2 + ((y_embed[:, :] - y_c)/y_c) ** 2).sqrt()
+        prob = (1 - dis.sigmoid()) * 2 - 0.2
+
+        if len(x.shape) == 5:
+            b, num_agents, c, _, _ = x.shape
+            prob = prob[None,None,None,:,:].expand(b,num_agents,-1,-1,-1)
+        elif len(x.shape) == 6:
+            b, k_agents, q_agents, c, _, _ = x.shape
+            prob = prob[None,None,None,None,:,:].expand(b,k_agents,q_agents,-1,-1,-1)
+        return prob
+
+    def get_colla_feats(self, x, shift_mats, with_pos=False, with_qual=False):
         val_feats = []
         for c_layer in self.trans_layer:
             feat_map = x[c_layer]
-            b, num_agents, c, h, w = feat_map.size()
+
+            if with_qual:
+                qual_map = self.mul_quality_map(feat_map) # (b, num_agents, 1, h, w)
+                # feat_map_mask = feat_map.max(dim=-3)[0]
+                # ones = torch.ones_like(feat_map_mask).to(feat_map.device)
+                # zeros = torch.zeros_like(feat_map_mask).to(feat_map.device)
+                # feat_map_mask = torch.where(feat_map_mask>0, ones, zeros).unsqueeze(2) # (b, num_agents, 1, h, w)
+                # qual_map = qual_map * feat_map_mask
 
             if with_pos:
                 feat_map = self.add_pe_map(feat_map)
-
+            
+            b, num_agents, c, h, w = feat_map.size()
             ori_shift_mats = shift_mats[c_layer]
 
             # Get the value mat (shift global feature to current agent coord) # val_feat: (b, k_agents, q_agents, c, h, w)
             shift_mats_k = ori_shift_mats.unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()  #  (b, k_agents, q_agents, 3, 3)
             shift_mats_q = torch.inverse(ori_shift_mats.unsqueeze(2).expand(-1, -1, num_agents, -1, -1).contiguous()).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()   # (b, k_agents, q_agents, 3, 3)
-
             cur_shift_mats = shift_mats_k @ shift_mats_q    # (b*k_agents*q_agents, 3, 3)
 
             global_feat = feat_map.view(b, num_agents, c, h, w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
@@ -1013,6 +1045,19 @@ class DLASeg(nn.Module):
             
             val_feat = kornia.warp_perspective(global_feat, cur_shift_mats, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
             val_feat = val_feat.view(b, num_agents, num_agents, c, h, w).contiguous() # (b, k_agents, q_agents, c, h, w)
+            
+            if with_qual:
+                global_qual_map = qual_map.view(b, num_agents, 1, h, w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
+                global_qual_map = global_qual_map.contiguous().view(b*num_agents*num_agents, 1, h, w).contiguous()
+                
+                val_qual_map = kornia.warp_perspective(global_qual_map, cur_shift_mats, dsize=(h, w)) # (b*num_agents*num_agents, c, h, w)
+                val_qual_map = val_qual_map.view(b, num_agents, num_agents, 1, h, w).contiguous() # (b, k_agents, q_agents, c, h, w)
+
+                for i in range(num_agents):
+                    q_qual_map = val_qual_map[:,i:i+1,i]
+                    k_qual_maps = val_qual_map[:,:,i]
+                    rel_qual_maps = q_qual_map + k_qual_maps
+                    val_feat[:,:,i] = (k_qual_maps / (rel_qual_maps + 1e-6)) * val_feat[:,:,i]
 
             val_feats.append(val_feat)
         return val_feats
@@ -1081,7 +1126,7 @@ class DLASeg(nn.Module):
             feat_maps = torch.cat(feat_maps, dim=1) # (b, kernel**2, c, h, w)
             return feat_maps
 
-        val_feats = self.get_colla_feats(x, shift_mats, with_pos=False) # (b, k_agents, q_agents, c, h, w)
+        val_feats = self.get_colla_feats(x, shift_mats, with_pos=True) # (b, k_agents, q_agents, c, h, w)
 
         weight_mats = []
         for i, c_layer in enumerate(self.trans_layer):
@@ -1123,6 +1168,39 @@ class DLASeg(nn.Module):
             x[c_layer] = post_commu_feats
         return x, weight_mats, val_feats
     
+    def Consistency_Mask(self, x, x_max):
+        '''
+        Args:
+            x: (b, k_agents, q_agents, c, h, w)
+        Function:
+            U_q = \mean_{k=0,...,N_q; k\= q} (|| x_q - x_k || * M_k)
+        '''
+        C = []
+        b, k_agents, q_agents, c, h, w = x.shape
+        ones = torch.ones([b, k_agents-1, h, w]).to(x.device)
+        zeros = torch.zeros([b, k_agents-1, h, w]).to(x.device)
+        for i in range(q_agents):
+            x_q = x[:,i,i]
+            x_k = torch.cat([x[:,:i,i], x[:,i+1:,i]], dim=1) # (b, k_agents-1, c, h, w)
+            max_k = torch.cat([x_max[:,:i,i], x_max[:,i+1:,i]], dim=1).squeeze(dim=2) # (b, k_agents-1, h, w)
+            mask_ks = torch.where(max_k>0, ones, zeros) # (b, k_agents-1, h, w)
+            mask_k = mask_ks.max(dim=1)[0]
+            max_q = x_max[:,i,i].squeeze(1)
+            mask_q = torch.where(max_q>0, ones[:,0], zeros[:,0])[0]   # (b, h, w)
+            l_k = ((x_q.unsqueeze(1) - x_k).mean(dim=-3) * mask_ks).mean(dim=-3) * (k_agents-1) / (mask_ks.sum(dim=1)+1e-6) # (b, h, w)
+
+            # Update x with the consistency mask   
+            c_k = l_k.sigmoid() * mask_k * mask_q    # uncertainty for both visible area
+            c_k += ones[:,0] * mask_k * (1 - mask_q)
+            c_k += ones[:,0] * 0.5 * (1 - mask_k) * (1 - mask_q)
+            c_k = c_k.unsqueeze(1)
+
+            x_q = (1 - c_k) * x_q
+            x_k = c_k.unsqueeze(1) * x_k
+            C.append(c_k)
+        C = torch.cat(C, dim=1) # (b, q_agents, h, w)
+        return x, C
+
 
     def TRANSFORMER_MESSAGE(self, x, shift_mats, kernel_size=3, stride=2):
         def get_padded_feat(x, kernel_size=3, stride=1):
@@ -1145,21 +1223,28 @@ class DLASeg(nn.Module):
             feat_maps = torch.cat(feat_maps, dim=1) # (b, kernel**2, c, h, w)
             return feat_maps
 
-        val_feats = self.get_colla_feats(x, shift_mats, with_pos=True) # (b, k_agents, q_agents, c, h, w)
+        val_feats = self.get_colla_feats(x, shift_mats, with_pos=True, with_qual=True) # (b, k_agents, q_agents, c, h, w)
+
+        # x_max = [feat_map.max(dim=-3)[0].unsqueeze(2) for feat_map in x] # # (b, q_agents, 1, h, w)
+        # val_max_feats = self.get_colla_feats(x_max, shift_mats, with_pos=False) # (b, k_agents, q_agents, 1, h, w)
 
         weight_mats = []
         for i, c_layer in enumerate(self.trans_layer):
             feat_map = x[c_layer]
             val_feat = val_feats[i]
 
+            saved_val_feats = val_feat.detach()
+
+            # val_feat, C_mask = self.Consistency_Mask(val_feat, val_max_feats[c_layer])
+
             feat_map = self.add_pe_map(feat_map)
             b, num_agents, c, h, w = feat_map.size()
             
             src = feat_map.permute(0,1,3,4,2).contiguous().view(b*num_agents*h*w,c).contiguous().unsqueeze(0)    # (1, b*num_agents*h*w, c)
-            # tgt = val_feat.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
-            tgt = get_local_feat(val_feat.view(b*num_agents*num_agents, c, h, w).contiguous(), kernel_size=kernel_size, stride=stride)
-            tgt = tgt.contiguous().view(b, num_agents, num_agents, kernel_size**2, c, h, w).contiguous()
-            tgt = tgt.permute(1,3,0,2,5,6,4).contiguous().view(num_agents*kernel_size**2, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            tgt = val_feat.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            # tgt = get_local_feat(val_feat.view(b*num_agents*num_agents, c, h, w).contiguous(), kernel_size=kernel_size, stride=stride)
+            # tgt = tgt.contiguous().view(b, num_agents, num_agents, kernel_size**2, c, h, w).contiguous()
+            # tgt = tgt.permute(1,3,0,2,5,6,4).contiguous().view(num_agents*kernel_size**2, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
             
             src2, weight_mat = eval('self.cross_attn'+str(c_layer))(src, tgt, value=tgt, attn_mask=None, key_padding_mask=None)
             src = src + eval('self.dropout1_'+str(c_layer))(src2)
@@ -1169,11 +1254,14 @@ class DLASeg(nn.Module):
             src = eval('self.norm2_'+str(c_layer))(src)
 
             feat_fuse = src.view(b, num_agents, h, w, c).contiguous().permute(0, 1, 4, 2, 3).contiguous()
+            weight_mat = weight_mat.view(b, num_agents, h, w, num_agents).contiguous().permute(0, 1, 4, 2, 3).contiguous()
 
             post_commu_feats = feat_fuse
             x[c_layer] = post_commu_feats
             weight_mats.append(weight_mat)
-        return x, weight_mats, val_feats
+
+        # return x, C_mask, saved_val_feats
+        return x, weight_mats[0], saved_val_feats
 
     def V2V_MESSAGE(self, x, shift_mats):
         weight_mats = []
@@ -1253,7 +1341,16 @@ class DLASeg(nn.Module):
     def GlobalCoord_forward(self, images, trans_mats, shift_mats, map_scale):
         b, num_agents, img_c, img_h, img_w = images.size()
         images = images.view(b*num_agents, img_c, img_h, img_w)
-        
+
+        if self.vis:
+            cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
+            worldgrid2worldcoord_mat = torch.Tensor(np.array([[map_scale, 0, 0], [0, map_scale, 0], [0, 0, 1]])).to(cur_trans_mats.device)
+            cur_trans_mats = shift_mats[0].view(b*num_agents, 3, 3) @ torch.inverse(cur_trans_mats @ worldgrid2worldcoord_mat).contiguous()
+            images_warped = kornia.warp_perspective(images, cur_trans_mats, dsize=(self.feat_H, self.feat_W))
+            images_warped = images_warped.contiguous().view(b, num_agents, 3, self.feat_H, self.feat_W).contiguous()
+            images_warped = self.get_colla_feats([images_warped], shift_mats, with_pos=False)
+
+
         if self.feat_mode in ['early', 'fused']:
             # print('Warp image')
             cur_trans_mats = trans_mats[0].view(b*num_agents, 3, 3)
@@ -1654,6 +1751,68 @@ class DLASeg(nn.Module):
         #         # axes[i,j].set_yticks([])
         #         plt.savefig('offset/{}_{}.png'.format(index_i, layer_i))
         #         plt.close()
+
+        # Visualize weight mats (b, N, h, w)
+        if self.vis:
+            # root_dir = os.path.dirname(__file__)
+            # for layer_ind, c_layer in enumerate(self.trans_layer):
+            #     # import ipdb; ipdb.set_trace()
+            #     cur_images = images_warped[layer_ind] # (b, k_agents, q_agents, 3, h, w)
+            #     b, k_agents, q_agents, _, _, _ = cur_images.shape
+            #     cur_time = '{}'.format(time.time())[-4:]
+            #     for i in range(b):
+            #         save_dir = os.path.join(root_dir, 'consist_mask', '{}_{}'.format(cur_time, i))
+            #         if not os.path.exists(save_dir):
+            #             os.makedirs(save_dir)
+            #         for j in range(q_agents):
+            #             fig, axes = plt.subplots(3, 2)
+            #             axes[0,0].imshow(weight_mats[i,j].detach().cpu().numpy()) # (b, q_agents, h, w)
+            #             axes[0,0].set_xticks([])
+            #             axes[0,0].set_yticks([])
+
+            #             axes[0,1].imshow((cur_images[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+            #             axes[0,1].set_xticks([])
+            #             axes[0,1].set_yticks([])
+                        
+            #             index_list = [x for x in range(k_agents) if x != j]
+
+            #             for index_k, k in enumerate(index_list):
+            #                 index_x = index_k // 2 + 1
+            #                 index_y = index_k % 2
+            #                 axes[index_x, index_y].imshow((cur_images[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8'))
+            #                 axes[index_x, index_y].set_xticks([])
+            #                 axes[index_x, index_y].set_yticks([])
+            #             plt.savefig(os.path.join(save_dir, '{}.png'.format(j)))
+            #             plt.close()
+
+            root_dir = os.path.dirname(__file__)
+            for layer_ind, c_layer in enumerate(self.trans_layer):
+                # import ipdb; ipdb.set_trace()
+                cur_images = images_warped[layer_ind] # (b, k_agents, q_agents, 3, h, w)
+                b, k_agents, q_agents, _, _, _ = cur_images.shape
+                cur_time = '{}'.format(time.time())[-4:]
+                for i in range(b):
+                    save_dir = os.path.join(root_dir, 'transformer_attn_weights', '{}_{}'.format(cur_time, i))
+                    if not os.path.exists(save_dir):
+                        os.makedirs(save_dir)
+                    for j in range(q_agents):
+                        fig, axes = plt.subplots(3, 5, figsize=(20,6))
+                        for k in range(k_agents):
+                            axes[0,k].imshow(weight_mats[i,j,k].detach().cpu().numpy()) # (b, q_agents, h, w)
+                            axes[0,k].set_xticks([])
+                            axes[0,k].set_yticks([])
+
+                            axes[1,k].imshow((cur_images[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[1,k].set_xticks([])
+                            axes[1,k].set_yticks([])
+
+                            axes[2,k].imshow((cur_images[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[2,k].set_xticks([])
+                            axes[2,k].set_yticks([])
+                            
+                        plt.savefig(os.path.join(save_dir, '{}.png'.format(j)))
+                        plt.close()
+
         if self.depth_mode == 'Weighted':
             global_z['z'] = global_depth_weights_list[0]
             # global_z['z'] = torch.cat(global_depth_weights_list, dim=1)

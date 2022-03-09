@@ -486,4 +486,4 @@ if __name__ == '__main__':
         elif town_id == 2:
             data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m'
 
-        pop_ignored_box(data_dir, ignore_flag=1)
+        pop_ignored_box(data_dir, ignore_flag=0)

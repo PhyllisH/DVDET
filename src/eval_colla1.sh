@@ -4,6 +4,8 @@ gpu_id=$1
 message_mode=$2
 exp_id=$3
 trans_layer=$4
+warp_mode=$5
+depth_mode=$6
 # feat_mode=$4
 
 epoch=('20' '40' '60' '80' '100' '120' '140' '160' '180' '200' 'last' 'best')
@@ -18,7 +20,7 @@ feat_mode='inter'
 
 # warp_mode='DW'
 # warp_mode='DADW'
-warp_mode='HW'
+# warp_mode='HW'
 # warp_mode='RLW'
 # warp_mode='LW'
 
@@ -26,7 +28,7 @@ warp_mode='HW'
 coord='Global'
 # coord='Local'
 
-depth_mode='Unique'
+# depth_mode='Unique'
 # depth_mode='Weighted'
 
 # message_mode='Pointwise'
