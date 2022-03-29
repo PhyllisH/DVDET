@@ -93,7 +93,7 @@ class opts(object):
                                  help='batch size on the master gpu.')
         self.parser.add_argument('--num_iters', type=int, default=-1,
                                  help='default: #samples / batch_size.')
-        self.parser.add_argument('--val_intervals', type=int, default=10,
+        self.parser.add_argument('--val_intervals', type=int, default=5,
                                  help='number of epochs to run validation.')
         self.parser.add_argument('--trainval', action='store_true',
                                  help='include validation in training and '
@@ -244,7 +244,7 @@ class opts(object):
                                  help='visualize the attention weight mats')
         self.parser.add_argument('--polygon', action='store_true',
                                  help='represent box with polygon')
-        self.parser.add_argument('--uav_height', type=int, default=40,
+        self.parser.add_argument('--uav_height', default=[40], nargs='+', type=int,
                                  help='uav height')
         self.parser.add_argument('--input_dir', default='',
                                  help='Local or Global')
@@ -255,6 +255,8 @@ class opts(object):
                                  help='HW or LW')
         self.parser.add_argument('--depth_mode', default='Unique',
                                  help='Unique or Weighted')
+        self.parser.add_argument('--depth_weight', default=1.0, type=float,
+                                 help='1/0')
         self.parser.add_argument('--feat_mode', default='inter',
                                  help='early | inter | fused')
         self.parser.add_argument('--gpu_chunk_size', default=None,
@@ -262,8 +264,8 @@ class opts(object):
         
         self.parser.add_argument('--real', action='store_true',
                                  help='load real dataset')
-        self.parser.add_argument('--with_occluded', action='store_true',
-                                 help='train the occluded boxes')
+        self.parser.add_argument('--round', default=1, type=int,
+                                 help='communication round')
         
 
     def parse(self, args=''):

@@ -14,10 +14,13 @@ import imp
 import os
 import math
 import logging
+from re import X
+from turtle import update
 import ipdb
 from kornia.geometry.epipolar.projection import depth
 from kornia.geometry.transform.imgwarp import warp_affine
 from matplotlib.colors import hsv_to_rgb
+from matplotlib.style import context
 import numpy as np
 from os.path import join
 import math
@@ -777,7 +780,7 @@ class MIMOGeneralDotProductAttention(nn.Module):
 class DLASeg(nn.Module):
     def __init__(self, base_name, heads, pretrained, down_ratio, final_kernel,
                  last_level, head_conv, out_channel=0, message_mode='NO_MESSAGE', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique',
-                 feat_mode='inter', feat_shape=[192, 352]):
+                 feat_mode='inter', feat_shape=[192, 352], round=1):
         super(DLASeg, self).__init__()
         assert down_ratio in [2, 4, 8, 16]
         self.first_level = int(np.log2(down_ratio))
@@ -942,7 +945,29 @@ class DLASeg(nn.Module):
                 self.__setattr__('dropout0_'+str(c_layer), dropout0)
                 self.__setattr__('dropout1_'+str(c_layer), dropout1)
                 self.__setattr__('dropout2_'+str(c_layer), dropout2)
-    
+        elif self.message_mode in ['QualityMap']:
+            for c_layer in self.trans_layer:
+                if c_layer >= 0:
+                    weight_net = []
+                    in_channels = [64*2**c_layer*3, 32*3, 1]
+                    for i in range(len(in_channels)-1):
+                        weight_net.append(
+                            nn.Conv2d(
+                                in_channels[i],
+                                in_channels[i+1],
+                                kernel_size=1,
+                                stride=1,
+                                padding=0
+                            )
+                        )
+                        weight_net.append(nn.ReLU())
+
+                    self.add_module('weight_net'+str(c_layer), nn.Sequential(*weight_net))
+                    self.__setattr__('pool_net'+str(c_layer), nn.MaxPool2d(2**c_layer, stride=2**c_layer))
+                    # weight_net = nn.Conv2d(128*2**c_layer+4, 1, kernel_size=1, stride=1, padding=0)
+                    # weight_net = nn.Conv2d(128*3**c_layer, 1, kernel_size=1, stride=1, padding=0)
+                    # self.__setattr__('weight_net'+str(c_layer), weight_net)
+        self.round = round
     
     def add_coord_map(self, input, normalized=True):
         if len(input.shape) == 5:
@@ -1122,7 +1147,68 @@ class DLASeg(nn.Module):
             post_commu_feats = feat_fuse * 0.5 + feat_map * 0.5
             x[c_layer] = post_commu_feats
         return x, weight_mats, val_feats
-    
+
+    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1):
+        
+        def _message_packing():
+            return 
+
+        def _message_fusing(query_feat, val_feat, quality_map):
+            b, num_agents, c, h, w = query_feat.shape
+            query_feat = query_feat.unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous()   # (b*num_agents, c, h, w) --> (b, k_agents, q_agents, c, h, w)
+            context_feat_mask = torch.where(val_feat>0, torch.ones_like(val_feat).to(val_feat.device), torch.zeros_like(val_feat).to(val_feat.device))
+            context_feat_mask = context_feat_mask.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() - context_feat_mask
+            context_feat = val_feat.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() # (b, k_agents, q_agents, c, h, w)
+            context_feat = (context_feat-val_feat) / (context_feat_mask+1e-6)
+            weight_mat = torch.cat([query_feat, val_feat, context_feat], dim=3).view(b*num_agents*num_agents, c*3, h, w)
+            weight_mat = self.__getattr__('weight_net'+str(c_layer))(weight_mat).sigmoid()    # (b*k_agents*q_agents, c, h, w)
+            weight_mat = weight_mat.view(b, num_agents, num_agents, 1, h, w) * quality_map
+            weight_mat = weight_mat / (weight_mat.sum(dim=1).unsqueeze(1) + 1e-6)
+            feat_fuse = (weight_mat * val_feat).sum(dim=1)    # (b*num_agents, c, h, w)
+            return feat_fuse, weight_mat
+        
+        def _communication_graph_learning():
+            return
+        
+        def _decoder(feat_maps, round_id):
+            results = {}
+            ############ Infer the quality map ##############
+            y = []
+            for i in range(self.last_level - self.first_level):
+                b, num_agents, c, h, w = feat_maps[i].shape
+                y.append(feat_maps[i].view(b*num_agents, c, h, w).clone())
+            self.ida_up(y, 0, len(y))
+            for head in self.heads:
+                results[head+'_single_r{}'.format(round_id)] = self.__getattr__(head)(y[-1]) # (b*num_agent, 2, 112, 200)
+            ##################################################
+            return results
+        
+        
+        weight_mats_dict = {}
+        results_dict = {}
+        for round_id in range(round):
+            b, num_agents, _,_,_ = x[0].shape
+            results = _decoder(x, round_id)
+            results_dict.update(results)
+            quality_maps = results['hm_single_r{}'.format(round_id)].clone()
+            if self.trans_layer[0] > 0:
+                quality_maps = self.__getattr__('pool_net'+str(self.trans_layer[0]))(results['hm_single_r{}'.format(round_id)].clone())
+            quality_maps = quality_maps.reshape(b, num_agents, 1, quality_maps.shape[-2], quality_maps.shape[-1])
+            val_feats = self.get_colla_feats(x, shift_mats, with_pos=False) # (b, k_agents, q_agents, c, h, w)
+            quality_maps_list = [0,0,0,0]
+            quality_maps_list[self.trans_layer[0]] = quality_maps
+            quality_maps = self.get_colla_feats(quality_maps_list, shift_mats, with_pos=False)
+            
+            weight_mats = []
+            for i, c_layer in enumerate(self.trans_layer):
+                feat_map = x[c_layer]
+                val_feat = val_feats[i]
+                quality_map = quality_maps[i]
+                feat_fuse, weight_mat = _message_fusing(feat_map, val_feat, quality_map)
+                weight_mats.append(weight_mat)
+                x[c_layer] = feat_fuse
+            weight_mats_dict[round_id] = weight_mats
+        return x, weight_mats, results_dict
 
     def TRANSFORMER_MESSAGE(self, x, shift_mats, kernel_size=3, stride=2):
         def get_padded_feat(x, kernel_size=3, stride=1):
@@ -1564,25 +1650,27 @@ class DLASeg(nn.Module):
             pass
         else:
             if self.feat_mode in ['early', 'inter']:
-                colla_x = global_x
+                single_x = global_x
             elif self.feat_mode == 'fused':
-                colla_x = global_x_fused
+                single_x = global_x_fused
 
-            for c_layer, feat_map in enumerate(colla_x):
+            for c_layer, feat_map in enumerate(single_x):
                 _, c, h, w = feat_map.shape
                 feat_map = feat_map.view(b, num_agents, c, h, w)
-                colla_x[c_layer] = feat_map
+                single_x[c_layer] = feat_map
             
             if self.message_mode in ['Mean', 'Max', 'Pointwise']:
-                colla_x, weight_mats, val_feats = self.COLLA_MESSAGE(colla_x, shift_mats)
+                colla_x, weight_mats, val_feats = self.COLLA_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['V2V']:
-                colla_x, weight_mats, val_feats = self.V2V_MESSAGE(colla_x, shift_mats)
+                colla_x, weight_mats, val_feats = self.V2V_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['When2com']:
-                colla_x, weight_mats, val_feats = self.WHEN2COM_MESSAGE(colla_x, shift_mats)
+                colla_x, weight_mats, val_feats = self.WHEN2COM_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['ATTEN']:
-                colla_x, weight_mats, val_feats = self.ATTEN_MESSAGE(colla_x, shift_mats)
+                colla_x, weight_mats, val_feats = self.ATTEN_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['TRANSFORMER']:
-                colla_x, weight_mats, val_feats = self.TRANSFORMER_MESSAGE(colla_x, shift_mats)
+                colla_x, weight_mats, val_feats = self.TRANSFORMER_MESSAGE(single_x, shift_mats)
+            elif self.message_mode in ['QualityMap']:
+                colla_x, weight_mats, results = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
             
             for c_layer, feat_map in enumerate(colla_x):
                 b, num_agents, c, h, w = feat_map.shape
@@ -1657,6 +1745,8 @@ class DLASeg(nn.Module):
         if self.depth_mode == 'Weighted':
             global_z['z'] = global_depth_weights_list[0]
             # global_z['z'] = torch.cat(global_depth_weights_list, dim=1)
+        global_z.update(results)
+        import ipdb; ipdb.set_trace()
         return [global_z]
     
     def JointCoord_forward(self, images, trans_mats, shift_mats, map_scale):
@@ -2036,7 +2126,7 @@ class DLASeg(nn.Module):
             return self.LocalCoord_forward(images, trans_mats)
         
 
-def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352]):
+def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352], round=1):
     model = DLASeg('dla{}'.format(num_layers), heads,
                     pretrained=True,
                     down_ratio=down_ratio,
@@ -2049,6 +2139,7 @@ def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='N
                     warp_mode=warp_mode,
                     depth_mode=depth_mode,
                     feat_mode=feat_mode,
-                    feat_shape=feat_shape)
+                    feat_shape=feat_shape,
+                    round=round)
     return model
 

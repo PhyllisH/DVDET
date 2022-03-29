@@ -148,6 +148,13 @@ class CtdetLoss(torch.nn.Module):
         hm_loss_i, wh_loss_i, off_loss_i = 0, 0, 0
         z_loss = 0
         acc_z = 0
+        single_loss = {}
+        for i in range(opt.round):
+            single_loss['hm_single_r{}_loss'.format(i)] = 0
+            single_loss['wh_single_r{}_loss'.format(i)] = 0
+            single_loss['off_single_r{}_loss'.format(i)] = 0
+            single_loss['angle_single_r{}_loss'.format(i)] = 0
+        
         for s in range(opt.num_stacks):
             output = outputs[s]
             if not opt.mse_loss:
@@ -157,6 +164,10 @@ class CtdetLoss(torch.nn.Module):
                     output['hm_fused'] = _sigmoid(output['hm_fused'])
                 if opt.coord == 'Joint':
                     output['hm_i'] = _sigmoid(output['hm_i'])
+                
+                for i in range(opt.round):
+                    output['hm_single_r{}'.format(i)] = _sigmoid(output['hm_single_r{}'.format(i)])
+                    single_loss['hm_single_r{}_loss'.format(i)] += self.crit(output['hm_single_r{}'.format(i)], batch['hm']) / opt.num_stacks
 
             if opt.eval_oracle_hm:
                 output['hm'] = batch['hm']
@@ -241,6 +252,11 @@ class CtdetLoss(torch.nn.Module):
                     wh_loss += self.crit_reg(
                         output['wh'], batch['reg_mask'],
                         batch['ind'], batch['wh']) / opt.num_stacks
+                    
+                    for i in range(opt.round):
+                        single_loss['wh_single_r{}_loss'.format(i)] += self.crit_reg(
+                                            output['wh_single_r{}'.format(i)], batch['reg_mask'],
+                                            batch['ind'], batch['wh']) / opt.num_stacks
                     if (opt.coord in ['Global', 'Joint']) and (opt.feat_mode=='fused'):
                         wh_loss_early += self.crit_reg(
                             output['wh_early'], batch['reg_mask'],
@@ -262,6 +278,10 @@ class CtdetLoss(torch.nn.Module):
                     angle_loss += self.crit_reg(
                             output['angle'], batch['reg_mask'],
                             batch['ind'], batch['angle']) / opt.num_stacks
+                    for i in range(opt.round):
+                        single_loss['angle_single_r{}_loss'.format(i)] += self.crit_reg(
+                                            output['angle_single_r{}'.format(i)], batch['reg_mask'],
+                                            batch['ind'], batch['angle']) / opt.num_stacks
                     # angle_loss += self._angle_loss(output['angle'], output['wh'], output['reg'],
                     #                                  batch['wh'], batch['reg'], batch['angle'], batch['reg_mask'], batch['ind'])
                     if opt.feat_mode == 'fused':
@@ -275,6 +295,10 @@ class CtdetLoss(torch.nn.Module):
             if opt.reg_offset and opt.off_weight > 0:
                 off_loss += self.crit_reg(output['reg'], batch['reg_mask'],
                                         batch['ind'], batch['reg']) / opt.num_stacks
+                for i in range(opt.round):
+                    single_loss['off_single_r{}_loss'.format(i)] += self.crit_reg(
+                                        output['reg_single_r{}'.format(i)], batch['reg_mask'],
+                                        batch['ind'], batch['reg']) / opt.num_stacks
                 if (opt.coord in ['Global', 'Joint']) and (opt.feat_mode=='fused'):
                     off_loss_early += self.crit_reg(output['reg_early'], batch['reg_mask'],
                                             batch['ind'], batch['reg']) / opt.num_stacks
@@ -284,49 +308,38 @@ class CtdetLoss(torch.nn.Module):
                     off_loss_i += self.crit_reg(output['reg_i'], batch['reg_mask_i'],
                                             batch['ind_i'], batch['reg_i']) / opt.num_stacks
 
+        loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss 
+        loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss}
         if opt.polygon and (opt.angle_weight > 0):
-            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + \
-                    opt.off_weight * off_loss + opt.angle_weight * angle_loss
-            loss_stats = {'loss': loss, 'hm_loss': hm_loss,
-                        'wh_loss': wh_loss, 'off_loss': off_loss, 'angle_loss': angle_loss}
-
-            if opt.feat_mode in ['fused']:
-                loss = loss + opt.hm_weight * (hm_loss_early + hm_loss_fused) + \
-                        opt.wh_weight * (wh_loss_early + wh_loss_fused) + \
-                        opt.off_weight * (off_loss_early + off_loss_fused) + \
-                        opt.angle_weight * (angle_loss_early + angle_loss_fused)
-                loss_stats.update({'loss': loss,
-                        'hm_loss_early': hm_loss_early, 'wh_loss_early': wh_loss_early, 'off_loss_early': off_loss_early,
-                        'hm_loss_fused': hm_loss_fused, 'wh_loss_fused': wh_loss_fused, 'off_loss_fused': off_loss_fused,
-                        'angle_loss_early': angle_loss_early, 'angle_loss_fused': angle_loss_fused})
-            if opt.coord == 'Joint':
-                loss = loss + opt.hm_weight * hm_loss_i + \
-                        opt.wh_weight * wh_loss_i + \
-                        opt.off_weight * off_loss_i 
-                loss_stats.update({'loss': loss, 'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
-            if ('z' in output) and (opt.depth_mode == 'Weighted'):
-                loss = loss + opt.wh_weight * z_loss
-                loss_stats.update({'loss': loss, 'z_loss': z_loss, 'acc_z': acc_z})
-                self.acc_z.append(acc_z)
-        else:
-            loss = opt.hm_weight * hm_loss + opt.wh_weight * wh_loss + opt.off_weight * off_loss 
-            loss_stats = {'loss': loss, 'hm_loss': hm_loss, 'wh_loss': wh_loss, 'off_loss': off_loss}
-            if opt.feat_mode in ['fused']:
-                loss = loss + opt.hm_weight * (hm_loss_early + hm_loss_fused) + \
-                        opt.wh_weight * (wh_loss_early + wh_loss_fused) + \
-                        opt.off_weight * (off_loss_early + off_loss_fused) 
-                loss_stats.update({'loss': loss, 
-                        'hm_loss_early': hm_loss_early, 'wh_loss_early': wh_loss_early, 'off_loss_early': off_loss_early,
-                        'hm_loss_fused': hm_loss_fused, 'wh_loss_fused': wh_loss_fused, 'off_loss_fused': off_loss_fused})
-            if opt.coord == 'Joint':
-                loss = loss + opt.hm_weight *  hm_loss_i + \
-                        opt.wh_weight * wh_loss_i + \
-                        opt.off_weight * off_loss_i
-                loss_stats.update({'loss': loss,'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
-            if opt.depth_mode == 'Weighted':
-                loss = loss + opt.wh_weight * z_loss
-                loss_stats.update({'loss': loss, 'z_loss': z_loss, 'acc_z': acc_z})
-                self.acc_z.append(acc_z)
+            loss = loss + opt.angle_weight * angle_loss
+            loss_stats.update({'angle_loss': angle_loss})
+        if opt.feat_mode in ['fused']:
+            loss = loss + opt.hm_weight * (hm_loss_early + hm_loss_fused) + \
+                    opt.wh_weight * (wh_loss_early + wh_loss_fused) + \
+                    opt.off_weight * (off_loss_early + off_loss_fused) 
+            loss_stats.update({'loss': loss, 
+                    'hm_loss_early': hm_loss_early, 'wh_loss_early': wh_loss_early, 'off_loss_early': off_loss_early,
+                    'hm_loss_fused': hm_loss_fused, 'wh_loss_fused': wh_loss_fused, 'off_loss_fused': off_loss_fused})
+            if opt.polygon and (opt.angle_weight > 0):
+                loss = loss + opt.angle_weight * (angle_loss_early + angle_loss_fused)
+                loss_stats.update({'angle_loss_early': angle_loss_early, 'angle_loss_fused': angle_loss_fused})
+        if opt.coord == 'Joint':
+            loss = loss + opt.hm_weight *  hm_loss_i + \
+                    opt.wh_weight * wh_loss_i + \
+                    opt.off_weight * off_loss_i
+            loss_stats.update({'loss': loss,'hm_loss_i': hm_loss_i, 'wh_loss_i': wh_loss_i, 'off_loss_i': off_loss_i})
+        if ('z' in output) and (opt.depth_mode == 'Weighted'):
+            loss = loss + opt.wh_weight * z_loss
+            loss_stats.update({'loss': loss, 'z_loss': z_loss, 'acc_z': acc_z})
+            self.acc_z.append(acc_z)
+        if len(single_loss)>0:
+            for i in range(opt.round):
+                loss = loss + opt.hm_weight * single_loss['hm_single_r{}_loss'.format(i)] \
+                            + opt.wh_weight * single_loss['wh_single_r{}_loss'.format(i)] \
+                            + opt.off_weight * single_loss['off_single_r{}_loss'.format(i)]
+                if opt.polygon and (opt.angle_weight > 0):
+                    loss = loss + opt.angle_weight * single_loss['angle_single_r{}_loss'.format(i)]
+            loss_stats.update(single_loss)
         return loss, loss_stats
 
 
@@ -347,6 +360,13 @@ class MultiAgentDetTrainer(BaseTrainer):
                 loss_states.extend(['angle_loss_early', 'angle_loss_fused'])
         if opt.coord == 'Joint':
             loss_states.extend(['hm_loss_i', 'wh_loss_i', 'off_loss_i'])
+        if opt.round >=1:
+            for i in range(opt.round):
+                loss_states.append('hm_single_r{}_loss'.format(i))
+                loss_states.append('wh_single_r{}_loss'.format(i))
+                loss_states.append('off_single_r{}_loss'.format(i))
+                if opt.polygon and (opt.angle_weight > 0):
+                    loss_states.append('angle_single_r{}_loss'.format(i))
         loss = CtdetLoss(opt)
         return loss_states, loss
 

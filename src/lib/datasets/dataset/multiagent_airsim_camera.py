@@ -44,36 +44,21 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
         else:
             self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2', \
-                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'] if opt.input_dir is '' else opt.input_dir
-            if split == 'val':
-                self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m', \
+                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_60m', \
+                            '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if opt.input_dir is '' else opt.input_dir
+            # if split == 'val':
+                # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
                 # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
-                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2',
-                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/']    
+                #                 '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2']    
             self.img_dir = self.data_dir
-
-        if isinstance(self.data_dir, list):
-            self.annot_path = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split)) \
-                                for data_dir in self.data_dir  if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split)))]
-        else:
-            self.annot_path = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances_sample.pkl'.format(opt.uav_height, split))
         
-        tail = '' if opt.with_occluded else '_woignoredbox'
-        # tail = '_ignoredbox' if opt.with_occluded else '_woignoredbox'
-        if isinstance(self.data_dir, list):
-            # self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)) \
-            #                                     for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height)))]
-            self.annot_path_cocoformat = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail)) \
-                                                for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail)))]
-            self.annot_path_cocoformat_uav = [os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail)) \
-                                                for data_dir in self.data_dir if os.path.exists(os.path.join(data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail)))]
-        else:
-            # self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_val_instances_global.json'.format(opt.uav_height))
-            self.annot_path_cocoformat = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances_global_crop{}.json'.format(opt.uav_height, split, tail))
-            self.annot_path_cocoformat_uav = os.path.join(self.data_dir, 'multiagent_annotations', '{}_{}_instances{}.json'.format(opt.uav_height, split, tail))
-
+        self.annot_path = self._get_path(self.data_dir, opt.uav_height, split, 'instances_sample.pkl')
+        self.annot_path_cocoformat = self._get_path(self.data_dir, opt.uav_height, split, 'instances_global_crop_woignoredbox.json')
+        self.annot_path_cocoformat_uav = self._get_path(self.data_dir, opt.uav_height, split, 'instances_woignoredbox.json')
+            
         self.max_objs = 128
         # self.class_name = [
         #     'car', 'car_overlook']
@@ -116,20 +101,15 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                 for sample_id, sample in enumerate(cur_sample):
                     cams = [x for x in sample.keys() if not x.startswith('vehicles')]
                     sorted(cams)
-                    assert len(cams) == 25
+                    # assert len(cams) == 25
                     for cam_id, cam in enumerate(cams):
                         updated_img_idx = sum(sample_counts[:-1]) + sample_id * 25 + cam_id
                         cur_img_idx_mapping[sample[cam]['image_id']] = updated_img_idx
                         sample[cam]['image_id'] = updated_img_idx
                 self.samples.extend(cur_sample)
-                self.img_dir.extend([self.data_dir[i]]*len(cur_sample))
+                cur_data_dir = annot_path.split('multiagent_annotations')[0]
+                self.img_dir.extend([cur_data_dir]*len(cur_sample))
                 self.img_idx_mapping.append(cur_img_idx_mapping)
-                with open('gts.pkl', 'wb') as f:
-                    pkl.dump(self.samples, f)
-                with open('imgs_dir.pkl', 'wb') as f:
-                    pkl.dump(self.img_dir, f)
-        self.num_samples = len(self.samples)
-        print('Loaded {} {} samples'.format(split, self.num_samples))
         if 'NO_MESSAGE' in opt.message_mode:
             self.num_agents = 1
             samples = []
@@ -146,7 +126,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                         img_dir.append(self.img_dir[i])
             self.samples = samples
             self.img_dir = img_dir
-            if split == 'train':
+            # if split in ['train', 'val']:
+            if split in ['train']:
                 samples = []
                 if isinstance(self.annot_path, str):
                     img_dir = self.img_dir
@@ -154,7 +135,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                     img_dir = []
                 for i, sample in enumerate(self.samples):
                     # print(len(sample['vehicles_i']))
-                    if len(sample['vehicles_i']) > 10:  # keep samples which contains more than 10 vehicles
+                    thre = 0 if self.opt.real else 20
+                    if len(sample['vehicles_i']) > thre:  # keep samples which contains more than 10 vehicles
                         samples.append(sample)
                         if not isinstance(self.annot_path, str):
                             img_dir.append(self.img_dir[i])
@@ -163,6 +145,27 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.num_samples = len(self.samples)
         else:
             self.num_agents = int(opt.num_agents)
+        self.num_samples = len(self.samples)
+        print('Loaded {} {} samples'.format(split, self.num_samples))
+        with open('gts.pkl', 'wb') as f:
+            pkl.dump(self.samples, f)
+        with open('imgs_dir.pkl', 'wb') as f:
+            pkl.dump(self.img_dir, f)
+    
+    def _get_path(self, data_dirs, uav_heights='40', split='train', tail='instances_sample.pkl'):
+        paths = []
+        if isinstance(data_dirs, str):
+            data_dirs = [data_dirs]
+        if isinstance(uav_heights, str):
+            uav_heights = [uav_heights]
+        
+        paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
+        valid_paths = [x for x in paths if os.path.exists(x)]
+
+        if len(valid_paths) == 1:
+            valid_paths = valid_paths[0]
+        
+        return valid_paths
 
     def _to_float(x):
         return float("{:.2f}".format(x))
