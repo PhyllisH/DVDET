@@ -266,6 +266,8 @@ class opts(object):
                                  help='load real dataset')
         self.parser.add_argument('--round', default=1, type=int,
                                  help='communication round')
+        self.parser.add_argument('--with_occluded', action='store_true',
+                                 help='train the occluded boxes')
         
 
     def parse(self, args=''):

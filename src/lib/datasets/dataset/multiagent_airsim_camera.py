@@ -56,8 +56,9 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             self.img_dir = self.data_dir
         
         self.annot_path = self._get_path(self.data_dir, opt.uav_height, split, 'instances_sample.pkl')
-        self.annot_path_cocoformat = self._get_path(self.data_dir, opt.uav_height, split, 'instances_global_crop_woignoredbox.json')
-        self.annot_path_cocoformat_uav = self._get_path(self.data_dir, opt.uav_height, split, 'instances_woignoredbox.json')
+        tail = '' if opt.with_occluded else '_woignoredbox'
+        self.annot_path_cocoformat = self._get_path(self.data_dir, opt.uav_height, split, 'instances_global_crop{}.json'.format(tail))
+        self.annot_path_cocoformat_uav = self._get_path(self.data_dir, opt.uav_height, split, 'instances{}.json'.format(tail))
             
         self.max_objs = 128
         # self.class_name = [
