@@ -47,8 +47,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_60m', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if opt.input_dir is '' else opt.input_dir
-            # if split == 'val':
-                # self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+            if split == 'val':
+                self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
                 # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
