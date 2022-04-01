@@ -89,11 +89,11 @@ def main(opt):
             save_model(os.path.join(opt.save_dir, 'model_last.pth'),
                        epoch, model, optimizer)
         logger.write('\n')
-        if (epoch in opt.lr_step) or (epoch%20==0):
+        if (epoch in opt.lr_step) or (epoch%10==0):
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
             if epoch in opt.lr_step:
-                lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
+                lr = opt.lr * (0.3 ** (opt.lr_step.index(epoch) + 1))
                 print('Drop LR to', lr)
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = lr

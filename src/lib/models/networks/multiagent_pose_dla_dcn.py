@@ -1205,8 +1205,22 @@ class DLASeg(nn.Module):
             feat_fuse = (weight_mat * val_feat).sum(dim=1)    # (b*num_agents, c, h, w)
             return feat_fuse, weight_mat
         
-        def _communication_graph_learning():
-            return
+        def _communication_graph_learning(val_feats, quality_maps, confidence_maps, thre=0.1):
+            # quality_map (b, k_agents, q_agents, 1, h, w)
+            # confidence_maps (b, q_agents, 1, h, w)
+            # a_ji = (1 - q_i)*q_ji
+            b, k_agents, q_agents, _, h, w = quality_maps.shape
+            communication_maps = quality_maps * (1 - confidence_maps).unsqueeze(1)
+            ones_mask = torch.zeros_like(communication_maps).to(communication_maps.device)
+            zeros_mask = torch.zeros_like(communication_maps).to(communication_maps.device)
+            communication_mask = torch.where((communication_maps - thre)>1e-6, ones_mask, zeros_mask)
+
+            val_feats_aftercom = val_feats.clone()
+            for q in range(q_agents):
+                val_feats_aftercom[:,:q,q] = val_feats[:,:q,q] * communication_mask[:,:q,q]
+                val_feats_aftercom[:,q+1:,q] = val_feats[:,q+1:,q] * communication_mask[:,q+1:,q]
+
+            return val_feats_aftercom
         
         def _decoder(feat_maps, round_id):
             results = {}
@@ -1228,14 +1242,15 @@ class DLASeg(nn.Module):
             b, num_agents, _,_,_ = x[0].shape
             results = _decoder(x, round_id)
             results_dict.update(results)
-            quality_maps = results['hm_single_r{}'.format(round_id)].clone().sigmoid()
+            confidence_maps = results['hm_single_r{}'.format(round_id)].clone().sigmoid()
             if self.trans_layer[0] > 0:
-                quality_maps = self.__getattr__('pool_net'+str(self.trans_layer[0]))(quality_maps)
-            quality_maps = quality_maps.reshape(b, num_agents, 1, quality_maps.shape[-2], quality_maps.shape[-1])
+                confidence_maps = self.__getattr__('pool_net'+str(self.trans_layer[0]))(confidence_maps)
+            confidence_maps = confidence_maps.reshape(b, num_agents, 1, confidence_maps.shape[-2], confidence_maps.shape[-1])
             val_feats = self.get_colla_feats(x, shift_mats, self.trans_layer, with_pos=False) # (b, k_agents, q_agents, c, h, w)
-            quality_maps_list = [0,0,0,0]
-            quality_maps_list[self.trans_layer[0]] = quality_maps
-            quality_maps = self.get_colla_feats(quality_maps_list, shift_mats, self.trans_layer, with_pos=False)
+            confidence_maps_list = [0,0,0,0]
+            confidence_maps_list[self.trans_layer[0]] = confidence_maps
+            quality_maps = self.get_colla_feats(confidence_maps_list, shift_mats, self.trans_layer, with_pos=False)
+            val_feats[0] = _communication_graph_learning(val_feats[0], quality_maps[0], confidence_maps)
             
             weight_mats = []
             for i, c_layer in enumerate(self.trans_layer):
