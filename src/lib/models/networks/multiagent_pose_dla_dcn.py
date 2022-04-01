@@ -964,6 +964,50 @@ class DLASeg(nn.Module):
                     # weight_net = nn.Conv2d(128*2**c_layer+4, 1, kernel_size=1, stride=1, padding=0)
                     # weight_net = nn.Conv2d(128*3**c_layer, 1, kernel_size=1, stride=1, padding=0)
                     # self.__setattr__('weight_net'+str(c_layer), weight_net)
+        elif self.message_mode in ['QualityMapTransformer']:
+            dropout = 0
+            nhead = 8
+            for c_layer in self.trans_layer:
+                if c_layer >= 0:
+                    d_model = 64*2**c_layer
+                    cross_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout)
+                    # Implementation of Feedforward model
+                    linear1 = nn.Linear(d_model, d_model)
+                    linear2 = nn.Linear(d_model, d_model)
+
+                    norm1 = nn.LayerNorm(d_model)
+                    norm2 = nn.LayerNorm(d_model)
+                    dropout0 = nn.Dropout(dropout)
+                    dropout1 = nn.Dropout(dropout)
+                    dropout2 = nn.Dropout(dropout)
+                    self.__setattr__('cross_attn'+str(c_layer), cross_attn)
+                    self.__setattr__('linear1_'+str(c_layer), linear1)
+                    self.__setattr__('linear2_'+str(c_layer), linear2)
+                    self.__setattr__('norm1_'+str(c_layer), norm1)
+                    self.__setattr__('norm2_'+str(c_layer), norm2)
+                    self.__setattr__('dropout0_'+str(c_layer), dropout0)
+                    self.__setattr__('dropout1_'+str(c_layer), dropout1)
+                    self.__setattr__('dropout2_'+str(c_layer), dropout2)
+
+                    weight_net = []
+                    in_channels = [d_model*2, d_model, d_model]
+                    for i in range(len(in_channels)-1):
+                        weight_net.append(
+                            nn.Conv2d(
+                                in_channels[i],
+                                in_channels[i+1],
+                                kernel_size=1,
+                                stride=1,
+                                padding=0
+                            )
+                        )
+                        weight_net.append(nn.ReLU())
+
+                    self.add_module('weight_net'+str(c_layer), nn.Sequential(*weight_net))
+                    self.__setattr__('pool_net'+str(c_layer), nn.MaxPool2d(2**c_layer, stride=2**c_layer))
+                    # weight_net = nn.Conv2d(128*2**c_layer+4, 1, kernel_size=1, stride=1, padding=0)
+                    # weight_net = nn.Conv2d(128*3**c_layer, 1, kernel_size=1, stride=1, padding=0)
+                    # self.__setattr__('weight_net'+str(c_layer), weight_net)
         self.round = round
         self.vis = False #True #
     
@@ -1186,7 +1230,7 @@ class DLASeg(nn.Module):
             x[c_layer] = post_commu_feats
         return x, weight_mats, val_feats
 
-    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1):
+    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1, fusion='context'):
         
         def _message_packing():
             return 
@@ -1205,13 +1249,41 @@ class DLASeg(nn.Module):
             feat_fuse = (weight_mat * val_feat).sum(dim=1)    # (b*num_agents, c, h, w)
             return feat_fuse, weight_mat
         
-        def _communication_graph_learning(val_feats, quality_maps, confidence_maps, thre=0.1):
+        def _transformer_message_fusing(query_feat, val_feat, quality_map):
+            query_feat = self.add_pe_map(query_feat)
+            b, num_agents, c, h, w = query_feat.size()
+            
+            context_feat_mask = torch.where(val_feat>0, torch.ones_like(val_feat).to(val_feat.device), torch.zeros_like(val_feat).to(val_feat.device))
+            context_feat_mask = context_feat_mask.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() - context_feat_mask
+            context_feat = val_feat.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() # (b, k_agents, q_agents, c, h, w)
+            context_feat = (context_feat-val_feat) / (context_feat_mask+1e-6)
+            tgt_feat = self.__getattr__('weight_net'+str(c_layer))(torch.cat([val_feat, context_feat], dim=3).reshape(b*num_agents*num_agents, c*2, h, w))
+            tgt_feat = tgt_feat.reshape(b, num_agents, num_agents, c, h, w)
+            
+            src = query_feat.permute(0,1,3,4,2).contiguous().view(b*num_agents*h*w,c).contiguous().unsqueeze(0)    # (1, b*num_agents*h*w, c)
+            tgt = tgt_feat.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            # tgt = get_local_feat(tgt_feat.view(b*num_agents*num_agents, c, h, w).contiguous(), kernel_size=kernel_size, stride=stride)
+            # tgt = tgt.contiguous().view(b, num_agents, num_agents, kernel_size**2, c, h, w).contiguous()
+            # tgt = tgt.permute(1,3,0,2,5,6,4).contiguous().view(num_agents*kernel_size**2, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            
+            src2, weight_mat = eval('self.cross_attn'+str(c_layer))(src, tgt, value=tgt, attn_mask=None, key_padding_mask=None)
+            src = src + eval('self.dropout1_'+str(c_layer))(src2)
+            src = eval('self.norm1_'+str(c_layer))(src)
+            src2 = eval('self.linear2_'+str(c_layer))(eval('self.dropout0_'+str(c_layer))(F.relu(eval('self.linear1_'+str(c_layer))(src))))
+            src = src + eval('self.dropout2_'+str(c_layer))(src2)
+            src = eval('self.norm2_'+str(c_layer))(src)
+
+            feat_fuse = src.view(b, num_agents, h, w, c).contiguous().permute(0, 1, 4, 2, 3).contiguous()
+            weight_mat = weight_mat.view(b, num_agents, h, w, num_agents).contiguous().permute(0, 1, 4, 2, 3).contiguous()
+            return feat_fuse, weight_mat
+        
+        def _communication_graph_learning(val_feats, quality_maps, confidence_maps, thre=0.03):
             # quality_map (b, k_agents, q_agents, 1, h, w)
             # confidence_maps (b, q_agents, 1, h, w)
             # a_ji = (1 - q_i)*q_ji
             b, k_agents, q_agents, _, h, w = quality_maps.shape
             communication_maps = quality_maps * (1 - confidence_maps).unsqueeze(1)
-            ones_mask = torch.zeros_like(communication_maps).to(communication_maps.device)
+            ones_mask = torch.ones_like(communication_maps).to(communication_maps.device)
             zeros_mask = torch.zeros_like(communication_maps).to(communication_maps.device)
             communication_mask = torch.where((communication_maps - thre)>1e-6, ones_mask, zeros_mask)
 
@@ -1220,7 +1292,7 @@ class DLASeg(nn.Module):
                 val_feats_aftercom[:,:q,q] = val_feats[:,:q,q] * communication_mask[:,:q,q]
                 val_feats_aftercom[:,q+1:,q] = val_feats[:,q+1:,q] * communication_mask[:,q+1:,q]
 
-            return val_feats_aftercom
+            return val_feats_aftercom, communication_mask
         
         def _decoder(feat_maps, round_id):
             results = {}
@@ -1246,22 +1318,25 @@ class DLASeg(nn.Module):
             if self.trans_layer[0] > 0:
                 confidence_maps = self.__getattr__('pool_net'+str(self.trans_layer[0]))(confidence_maps)
             confidence_maps = confidence_maps.reshape(b, num_agents, 1, confidence_maps.shape[-2], confidence_maps.shape[-1])
-            val_feats = self.get_colla_feats(x, shift_mats, self.trans_layer, with_pos=False) # (b, k_agents, q_agents, c, h, w)
+            val_feats = self.get_colla_feats(x, shift_mats, self.trans_layer, with_pos=True) # (b, k_agents, q_agents, c, h, w)
             confidence_maps_list = [0,0,0,0]
             confidence_maps_list[self.trans_layer[0]] = confidence_maps
             quality_maps = self.get_colla_feats(confidence_maps_list, shift_mats, self.trans_layer, with_pos=False)
-            val_feats[0] = _communication_graph_learning(val_feats[0], quality_maps[0], confidence_maps)
+            val_feats[0], communication_mask = _communication_graph_learning(val_feats[0], quality_maps[0], confidence_maps)
             
             weight_mats = []
             for i, c_layer in enumerate(self.trans_layer):
                 feat_map = x[c_layer]
                 val_feat = val_feats[i]
                 quality_map = quality_maps[i]
-                feat_fuse, weight_mat = _message_fusing(feat_map, val_feat, quality_map)
+                if fusion == 'transformer':
+                    feat_fuse, weight_mat = _transformer_message_fusing(feat_map, val_feat, quality_map)
+                else:
+                    feat_fuse, weight_mat = _message_fusing(feat_map, val_feat, quality_map)
                 weight_mats.append(weight_mat)
                 x[c_layer] = feat_fuse
             weight_mats_dict[round_id] = weight_mats
-        return x, weight_mat, results_dict, quality_map, val_feat
+        return x, weight_mat, results_dict, quality_map, val_feat, communication_mask
     
     def Consistency_Mask(self, x, x_max):
         '''
@@ -1774,7 +1849,9 @@ class DLASeg(nn.Module):
             elif self.message_mode in ['TRANSFORMER']:
                 colla_x, weight_mats, val_feats = self.TRANSFORMER_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['QualityMap']:
-                colla_x, weight_mats, results, quality_map, val_feat = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
+            elif self.message_mode in ['QualityMapTransformer']:
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, fusion='transformer')
             
             for c_layer, feat_map in enumerate(colla_x):
                 b, num_agents, c, h, w = feat_map.shape
@@ -1892,35 +1969,42 @@ class DLASeg(nn.Module):
                     if not os.path.exists(save_dir):
                         os.makedirs(save_dir)
                     for j in range(q_agents):
-                        fig, axes = plt.subplots(7, 5, figsize=(20,14))
+                        fig, axes = plt.subplots(8, 5, figsize=(20,16))
                         for k in range(k_agents):
-                            axes[0,k].imshow((weight_mats[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            if j == k:
+                                axes[0,k].imshow((weight_mats[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            else:
+                                axes[0,k].imshow(((weight_mats[i,k,j]*communication_mask[i,k,j]).detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[0,k].set_xticks([])
                             axes[0,k].set_yticks([])
-                            
-                            axes[1,k].imshow((quality_map[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+
+                            axes[1,k].imshow((communication_mask[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[1,k].set_xticks([])
                             axes[1,k].set_yticks([])
-
-                            axes[2,k].imshow((quality_map[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            
+                            axes[2,k].imshow((quality_map[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[2,k].set_xticks([])
                             axes[2,k].set_yticks([])
 
-                            axes[3,k].imshow((val_feat[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[3,k].imshow((quality_map[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[3,k].set_xticks([])
                             axes[3,k].set_yticks([])
 
-                            axes[4,k].imshow((val_feat[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[4,k].imshow((val_feat[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[4,k].set_xticks([])
                             axes[4,k].set_yticks([])
 
-                            axes[5,k].imshow((cur_images[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[5,k].imshow((val_feat[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[5,k].set_xticks([])
                             axes[5,k].set_yticks([])
 
-                            axes[6,k].imshow((cur_images[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[6,k].imshow((cur_images[i,k,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
                             axes[6,k].set_xticks([])
                             axes[6,k].set_yticks([])
+
+                            axes[7,k].imshow((cur_images[i,j,j].detach().cpu().numpy().transpose(1,2,0) * 255.).astype('uint8')) # (b, q_agents, h, w)
+                            axes[7,k].set_xticks([])
+                            axes[7,k].set_yticks([])
                         fig.tight_layout()
                         plt.savefig(os.path.join(save_dir, '{}.png'.format(j)))
                         plt.close()
