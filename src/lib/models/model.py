@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+import enum
 from typing import no_type_check
 from kornia.geometry.epipolar.projection import depth
 
@@ -78,16 +79,17 @@ def load_model(model, model_path, optimizer=None, resume=False,
 
     # resume optimizer parameters
     if optimizer is not None and resume:
-        if 'optimizer' in checkpoint:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            start_epoch = checkpoint['epoch']
-            start_lr = lr
-            for step in lr_step:
-                if start_epoch >= step:
-                    start_lr *= 0.1
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = start_lr
-            print('Resumed optimizer with start lr', start_lr)
+        for optim in optimizer:
+            if optim in checkpoint:
+                optimizer[optim].load_state_dict(checkpoint[optim])
+                start_epoch = checkpoint['epoch']
+                start_lr = lr
+                for step in lr_step:
+                    if start_epoch >= step:
+                        start_lr *= 0.1
+                for param_group in optimizer[optim].param_groups:
+                    param_group['lr'] = start_lr
+                print('Resumed optimizer with start lr', start_lr)
         else:
             print('No optimizer parameters in checkpoint.')
     if optimizer is not None:
@@ -104,5 +106,6 @@ def save_model(path, epoch, model, optimizer=None):
     data = {'epoch': epoch,
             'state_dict': state_dict}
     if not (optimizer is None):
-        data['optimizer'] = optimizer.state_dict()
+        for optim in optimizer:
+            data[optim] = optimizer[optim].state_dict()
     torch.save(data, path)

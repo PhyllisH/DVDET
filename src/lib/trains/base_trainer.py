@@ -5,6 +5,7 @@ from __future__ import print_function
 import time
 import torch
 from progress.bar import Bar
+from lib.models.networks.Compressor import compressor
 from models.data_parallel import DataParallel
 from utils.utils import AverageMeter
 
@@ -19,8 +20,8 @@ class ModelWithLoss(torch.nn.Module):
     def forward(self, batch):
         outputs = self.model(batch['input'], [batch['trans_mats'], batch['trans_mats_n005'], batch['trans_mats_n010'], batch['trans_mats_p005'], batch['trans_mats_p007'], batch['trans_mats_p010'], batch['trans_mats_p015'], batch['trans_mats_p020'], batch['trans_mats_p080']], \
                              [batch['shift_mats_1'], batch['shift_mats_2'], batch['shift_mats_4'], batch['shift_mats_8']], self.map_scale)
-        loss, loss_stats = self.loss(outputs, batch)
-        return outputs[-1], loss, loss_stats
+        loss, compressor_loss, compressor_aux_loss, loss_stats = self.loss(outputs, batch)
+        return outputs[-1], loss, compressor_loss, compressor_aux_loss, loss_stats
 
 
 class BaseTrainer(object):
@@ -38,11 +39,12 @@ class BaseTrainer(object):
                 chunk_sizes=chunk_sizes).to(device)
         else:
             self.model_with_loss = self.model_with_loss.to(device)
-
-        for state in self.optimizer.state.values():
-            for k, v in state.items():
-                if isinstance(v, torch.Tensor):
-                    state[k] = v.to(device=device, non_blocking=True)
+        
+        for optimizer in self.optimizer.values():
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.to(device=device, non_blocking=True)
 
     def run_epoch(self, phase, epoch, data_loader):
         model_with_loss = self.model_with_loss
@@ -69,12 +71,36 @@ class BaseTrainer(object):
             for k in batch:
                 if k != 'meta':
                     batch[k] = batch[k].to(device=opt.device, non_blocking=True)
-            output, loss, loss_stats = model_with_loss(batch)
-            loss = loss.mean()
+            output, loss, compressor_loss, compressor_aux_loss, loss_stats = model_with_loss(batch)
             if phase == 'train':
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                if self.opt.train_mode == 'detector':
+                    loss = loss.mean()
+                    self.optimizer['detector_optimizer'].zero_grad()
+                    loss.backward()
+                    self.optimizer['detector_optimizer'].step()
+                elif self.opt.train_mode == 'compressor':
+                    self.optimizer['compressor_optimizer'].zero_grad()
+                    self.optimizer['compressor_aux_optimizer'].zero_grad()
+
+                    compressor_loss = compressor_loss.mean()
+                    compressor_loss.backward()
+                    self.optimizer['compressor_optimizer'].step()
+
+                    compressor_aux_loss = compressor_aux_loss.mean()
+                    compressor_aux_loss.backward()
+                    self.optimizer['compressor_aux_optimizer'].step()
+                else:
+                    self.optimizer['optimizer'].zero_grad()
+                    self.optimizer['compressor_aux_optimizer'].zero_grad()
+                    tot_loss = (loss + compressor_loss).mean()
+                    tot_loss.backward()
+                    self.optimizer['optimizer'].step()
+
+                    compressor_aux_loss = compressor_aux_loss.mean()
+                    compressor_aux_loss.backward()
+                    self.optimizer['compressor_aux_optimizer'].step()
+
+
             batch_time.update(time.time() - end)
             end = time.time()
 
@@ -99,7 +125,7 @@ class BaseTrainer(object):
 
             if opt.test:
                 self.save_result(output, batch, results)
-            del output, loss, loss_stats
+            del output, loss, compressor_loss, compressor_aux_loss, loss_stats
 
         bar.finish()
         ret = {k: v.avg for k, v in avg_loss_stats.items()}

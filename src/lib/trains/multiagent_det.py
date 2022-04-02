@@ -15,7 +15,7 @@ from numpy.core.fromnumeric import put
 import torch
 import numpy as np
 
-from models.losses import FocalLoss
+from models.losses import FocalLoss, RateDistortionLoss
 from models.losses import RegL1Loss, RegLoss, NormRegL1Loss, RegWeightedL1Loss, ZFocalLoss
 from models.decode import ctdet_decode
 from models.utils import _sigmoid
@@ -100,6 +100,7 @@ class CtdetLoss(torch.nn.Module):
             NormRegL1Loss() if opt.norm_wh else \
                 RegWeightedL1Loss() if opt.cat_spec_wh else self.crit_reg
         self.crit_z = ZFocalLoss()
+        self.crit_comp = RateDistortionLoss()
         self.opt = opt
         self.acc_z = []
         self.count = 0
@@ -148,6 +149,8 @@ class CtdetLoss(torch.nn.Module):
         hm_loss_i, wh_loss_i, off_loss_i = 0, 0, 0
         z_loss = 0
         acc_z = 0
+        comp_loss = 0
+        comp_aux_loss = 0
         single_loss = {}
         for i in range(opt.round):
             single_loss['hm_single_r{}_loss'.format(i)] = 0
@@ -340,7 +343,14 @@ class CtdetLoss(torch.nn.Module):
                 if opt.polygon and (opt.angle_weight > 0):
                     loss = loss + opt.angle_weight * single_loss['angle_single_r{}_loss'.format(i)]
             loss_stats.update(single_loss)
-        return loss, loss_stats
+        
+        comp_loss += self.crit_comp(output['comp_out'], output['comp_gt'])["loss"]
+        comp_aux_loss += output['comp_aux_loss']
+        loss_stats.update({
+            'comp_loss': comp_loss,
+            'comp_aux_loss': comp_aux_loss
+        })
+        return loss, comp_loss, comp_aux_loss, loss_stats
 
 
 class MultiAgentDetTrainer(BaseTrainer):
@@ -367,6 +377,7 @@ class MultiAgentDetTrainer(BaseTrainer):
                 loss_states.append('off_single_r{}_loss'.format(i))
                 if opt.polygon and (opt.angle_weight > 0):
                     loss_states.append('angle_single_r{}_loss'.format(i))
+        loss_states.extend(['comp_loss', 'comp_aux_loss'])
         loss = CtdetLoss(opt)
         return loss_states, loss
 

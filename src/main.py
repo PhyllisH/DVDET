@@ -16,6 +16,66 @@ from datasets.dataset_factory import get_dataset
 from trains.train_factory import train_factory
 
 
+def configure_optimizers(net, lr, train_mode):
+    """Separate parameters for the main optimizer and the auxiliary optimizer.
+    Return three optimizers"""
+
+    detector_parameters = {
+        n
+        for n, p in net.named_parameters()
+        if not n.startswith("compressor") and p.requires_grad
+    }
+
+    compressor_parameters = {
+        n
+        for n, p in net.named_parameters()
+        if n.startswith("compressor") and not n.endswith(".quantiles") and p.requires_grad
+    }
+    compressor_aux_parameters = {
+        n
+        for n, p in net.named_parameters()
+        if n.startswith("compressor") and n.endswith(".quantiles") and p.requires_grad
+    }
+
+    # Make sure we don't have an intersection of parameters
+    params_dict = dict(net.named_parameters())
+    inter_params = compressor_parameters & compressor_aux_parameters
+    union_params = compressor_parameters | compressor_aux_parameters | detector_parameters
+
+    assert len(inter_params) == 0
+    assert len(union_params) - len(params_dict.keys()) == 0
+
+    optimizer_dict = {}
+    if train_mode == 'detector':
+        detector_optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(detector_parameters)),
+            lr=lr,
+        )
+        optimizer_dict['detector_optimizer'] = detector_optimizer
+    elif train_mode == 'compressor':
+        compressor_optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(compressor_parameters)),
+            lr=lr,
+        )
+        compressor_aux_optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(compressor_aux_parameters)),
+            lr=lr,
+        )
+        optimizer_dict['compressor_optimizer'] = compressor_optimizer
+        optimizer_dict['compressor_aux_optimizer'] = compressor_aux_optimizer
+    else:
+        optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted((detector_parameters|compressor_parameters))),
+            lr=lr,
+        )
+        compressor_aux_optimizer = torch.optim.Adam(
+            (params_dict[n] for n in sorted(compressor_aux_parameters)),
+            lr=lr,
+        )
+        optimizer_dict['optimizer'] = optimizer
+        optimizer_dict['compressor_aux_optimizer'] = compressor_aux_optimizer
+    return optimizer_dict
+
 def main(opt):
     torch.manual_seed(opt.seed)
     torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
@@ -31,7 +91,9 @@ def main(opt):
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
     model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape, opt.round)
-    optimizer = torch.optim.Adam(model.parameters(), opt.lr)
+    # import ipdb; ipdb.set_trace()
+    optimizer = configure_optimizers(model, opt.lr, opt.train_mode)
+    # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
     if opt.load_model != '':
         model, optimizer, start_epoch = load_model(
@@ -95,8 +157,9 @@ def main(opt):
             if epoch in opt.lr_step:
                 lr = opt.lr * (0.3 ** (opt.lr_step.index(epoch) + 1))
                 print('Drop LR to', lr)
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = lr
+                for optim in optimizer.values():
+                    for param_group in optim.param_groups:
+                        param_group['lr'] = lr
     logger.close()
 
 

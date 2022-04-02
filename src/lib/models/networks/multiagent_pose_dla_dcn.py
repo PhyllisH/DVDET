@@ -34,9 +34,11 @@ import cv2
 
 from .DCNv2.dcn_v2 import DCN, CF_DCN
 import sys
+
+from lib.models.networks.Compressor import compressor
 sys.path.append('/GPFS/data/yhu/code/CoDet/src/lib/models/networks')
 from .convolutional_rnn import Conv2dGRU
-from .Compressor import ScaleHyperprior
+from .Compressor.compressor import ScaleHyperprior
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -1010,8 +1012,8 @@ class DLASeg(nn.Module):
                     # weight_net = nn.Conv2d(128*2**c_layer+4, 1, kernel_size=1, stride=1, padding=0)
                     # weight_net = nn.Conv2d(128*3**c_layer, 1, kernel_size=1, stride=1, padding=0)
                     # self.__setattr__('weight_net'+str(c_layer), weight_net)
-        
-        self.compressor = ScaleHyperprior(N=128, M=192)
+        d_model = 64*2**self.trans_layer[0]
+        self.compressor = ScaleHyperprior(N=d_model//2, M=d_model)
         self.round = round
         self.vis = False #True #
     
@@ -1234,38 +1236,49 @@ class DLASeg(nn.Module):
             x[c_layer] = post_commu_feats
         return x, weight_mats, val_feats
 
-    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1, fusion='context'):
+    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1, fusion='context', compress_flag=True):
         
-        def _message_packing(val_feats, quality_maps, confidence_maps, compress_flag=True, train_flag=True):
-            b, k_agents, q_agents, c, h, w = val_feats
-            # weighting feature map
-            compression_maps = quality_maps * (1 - confidence_maps).unsqueeze(1)
-            feat_comm = []
-            compression_comm = []
-            for q in range(q_agents):
-                feat_comm.append(torch.cat([val_feats[:,:q,q], val_feats[:,q+1:,q]], dim=1).unsqueeze(2))
-                compression_comm.append(torch.cat([compression_maps[:,:q,q], compression_maps[:,q+1:,q]], dim=1).unsqueeze(2))
-            feat_comm = torch.cat(feat_comm, dim=2)
-            compression_comm = torch.cat(compression_comm, dim=2)
-            feat_comm = feat_comm * compression_comm # (b, k_agents-1, q_agents, c, h, w)
+        def _message_packing(val_feats, quality_maps, confidence_maps, compress_flag=True):
+            b, k_agents, q_agents, c, h, w = val_feats.shape
 
             # compression
             if compress_flag:
+                # weighting feature map
+                compression_maps = quality_maps * (1 - confidence_maps).unsqueeze(1)
+                feat_comm = []
+                compression_comm = []
+                for q in range(q_agents):
+                    feat_comm.append(torch.cat([val_feats[:,:q,q], val_feats[:,q+1:,q]], dim=1).unsqueeze(2))
+                    compression_comm.append(torch.cat([compression_maps[:,:q,q], compression_maps[:,q+1:,q]], dim=1).unsqueeze(2))
+                feat_comm = torch.cat(feat_comm, dim=2)
+                compression_comm = torch.cat(compression_comm, dim=2)
+
+                feat_comm = feat_comm * compression_comm # (b, k_agents-1, q_agents, c, h, w)
                 feat_comm = feat_comm.reshape(b*(k_agents-1)*q_agents, c, h, w)
-                if train_flag:
+                
+                if self.compressor.training:
+                    comp_gt = feat_comm.clone()
                     comp_out = self.compressor(feat_comm)
-                    recon_feat = comp_out["x_hat"]
+                    recon_feat = comp_out["x_hat"].clone()
                     likelihoods = comp_out["likelihoods"]
                 else:
+                    comp_gt = feat_comm.clone()
                     comp_out = self.compressor.compress(feat_comm)
                     strings = comp_out["strings"]
                     shape = comp_out["shape"]
                     comm_size = len(strings[0][0]) + len(strings[1][0])
                     recon_feat = self.compressor.decompress(strings, shape)["x_hat"]
-                local_com_mat_comm = recon_feat.reshape(b, k_agents, q_agents, c, h, w)
+                recon_feat = recon_feat.reshape(b, k_agents-1, q_agents, c, h, w)
+                recon_feat = recon_feat / (compression_comm + 1e-6)
+                local_com_mat_comm = []
+                for q in range(q_agents):
+                    local_com_mat_comm.append(torch.cat([recon_feat[:,:q,q], val_feats[:,q:q+1,q], recon_feat[:,q:,q]], dim=1).unsqueeze(2))
+                local_com_mat_comm = torch.cat(local_com_mat_comm, dim=2)
             else:
                 local_com_mat_comm = val_feats
-            return local_com_mat_comm
+                comp_gt = None
+                comp_out = None
+            return local_com_mat_comm, comp_gt, comp_out
 
         def _message_fusing(query_feat, val_feat, quality_map):
             b, num_agents, c, h, w = query_feat.shape
@@ -1355,7 +1368,9 @@ class DLASeg(nn.Module):
             confidence_maps_list = [0,0,0,0]
             confidence_maps_list[self.trans_layer[0]] = confidence_maps
             quality_maps = self.get_colla_feats(confidence_maps_list, shift_mats, self.trans_layer, with_pos=False)
+
             val_feats[0], communication_mask = _communication_graph_learning(val_feats[0], quality_maps[0], confidence_maps)
+            val_feats[0], comp_gt, comp_out = _message_packing(val_feats[0], quality_maps[0], confidence_maps, compress_flag=compress_flag)
             
             weight_mats = []
             for i, c_layer in enumerate(self.trans_layer):
@@ -1369,7 +1384,7 @@ class DLASeg(nn.Module):
                 weight_mats.append(weight_mat)
                 x[c_layer] = feat_fuse
             weight_mats_dict[round_id] = weight_mats
-        return x, weight_mat, results_dict, quality_map, val_feat, communication_mask
+        return x, weight_mat, results_dict, quality_map, val_feat, communication_mask, comp_gt, comp_out
     
     def Consistency_Mask(self, x, x_max):
         '''
@@ -1882,9 +1897,9 @@ class DLASeg(nn.Module):
             elif self.message_mode in ['TRANSFORMER']:
                 colla_x, weight_mats, val_feats = self.TRANSFORMER_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['QualityMap']:
-                colla_x, weight_mats, results, quality_map, val_feat, communication_mask = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
             elif self.message_mode in ['QualityMapTransformer']:
-                colla_x, weight_mats, results, quality_map, val_feat, communication_mask = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, fusion='transformer')
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, fusion='transformer')
             
             for c_layer, feat_map in enumerate(colla_x):
                 b, num_agents, c, h, w = feat_map.shape
@@ -2047,6 +2062,9 @@ class DLASeg(nn.Module):
             global_z['z'] = global_depth_weights_list[0]
             # global_z['z'] = torch.cat(global_depth_weights_list, dim=1)
         global_z.update(results)
+        global_z['comp_gt'] = comp_gt
+        global_z['comp_out'] = comp_out
+        global_z['comp_aux_loss'] = self.compressor.aux_loss()
         return [global_z]
     
     def JointCoord_forward(self, images, trans_mats, shift_mats, map_scale):

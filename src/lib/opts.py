@@ -269,6 +269,10 @@ class opts(object):
         self.parser.add_argument('--with_occluded', action='store_true',
                                  help='train the occluded boxes')
         
+        # compressor
+        self.parser.add_argument('--train_mode', default='detector',
+                                 help='train the detector | compressor | all')
+        
 
     def parse(self, args=''):
         if args == '':

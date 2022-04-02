@@ -212,7 +212,7 @@ class ScaleHyperprior(CompressionModel):
         super().__init__(entropy_bottleneck_channels=N, **kwargs)
 
         self.g_a = nn.Sequential(
-            conv(256, N),
+            conv(M, N),
             GDN(N),
             conv(N, N, kernel_size=3, stride=1),
             GDN(N),
@@ -228,13 +228,13 @@ class ScaleHyperprior(CompressionModel):
             GDN(N, inverse=True),
             deconv(N, N, kernel_size=3, stride=1),
             GDN(N, inverse=True),
-            deconv(N, 256),
+            deconv(N, M),
         )
 
         self.h_a = nn.Sequential(
             conv(M, N, stride=1, kernel_size=3),
             nn.ReLU(inplace=True),
-            conv(N, N),
+            conv(N, N, stride=1, kernel_size=3),
             nn.ReLU(inplace=True),
             conv(N, N),
         )
@@ -242,7 +242,7 @@ class ScaleHyperprior(CompressionModel):
         self.h_s = nn.Sequential(
             deconv(N, N),
             nn.ReLU(inplace=True),
-            deconv(N, N),
+            deconv(N, N, stride=1, kernel_size=3),
             nn.ReLU(inplace=True),
             conv(N, M, stride=1, kernel_size=3),
             nn.ReLU(inplace=True),
