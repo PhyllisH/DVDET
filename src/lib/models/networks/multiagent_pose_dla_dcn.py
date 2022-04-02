@@ -1289,16 +1289,17 @@ class DLASeg(nn.Module):
             context_feat_mask = context_feat_mask.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() - context_feat_mask
             context_feat = val_feat.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() # (b, k_agents, q_agents, c, h, w)
             context_feat = (context_feat-val_feat) / (context_feat_mask+1e-6)
-            tgt_feat = self.__getattr__('weight_net'+str(c_layer))(torch.cat([val_feat, context_feat], dim=3).reshape(b*num_agents*num_agents, c*2, h, w))
-            tgt_feat = tgt_feat.reshape(b, num_agents, num_agents, c, h, w)
+            val_feat_withcontext = self.__getattr__('weight_net'+str(c_layer))(torch.cat([val_feat, context_feat], dim=3).reshape(b*num_agents*num_agents, c*2, h, w))
+            val_feat_withcontext = val_feat_withcontext.reshape(b, num_agents, num_agents, c, h, w)
             
             src = query_feat.permute(0,1,3,4,2).contiguous().view(b*num_agents*h*w,c).contiguous().unsqueeze(0)    # (1, b*num_agents*h*w, c)
-            tgt = tgt_feat.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            tgt = val_feat_withcontext.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
+            val = val_feat.permute(1,0,2,4,5,3).contiguous().view(num_agents, b*num_agents*h*w,c).contiguous()
             # tgt = get_local_feat(tgt_feat.view(b*num_agents*num_agents, c, h, w).contiguous(), kernel_size=kernel_size, stride=stride)
             # tgt = tgt.contiguous().view(b, num_agents, num_agents, kernel_size**2, c, h, w).contiguous()
             # tgt = tgt.permute(1,3,0,2,5,6,4).contiguous().view(num_agents*kernel_size**2, b*num_agents*h*w,c).contiguous()    # (num_agents, b*num_agents*h*w, c)
             
-            src2, weight_mat = eval('self.cross_attn'+str(c_layer))(src, tgt, value=tgt, attn_mask=None, key_padding_mask=None)
+            src2, weight_mat = eval('self.cross_attn'+str(c_layer))(src, tgt, value=val, attn_mask=None, key_padding_mask=None)
             src = src + eval('self.dropout1_'+str(c_layer))(src2)
             src = eval('self.norm1_'+str(c_layer))(src)
             src2 = eval('self.linear2_'+str(c_layer))(eval('self.dropout0_'+str(c_layer))(F.relu(eval('self.linear1_'+str(c_layer))(src))))
