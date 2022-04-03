@@ -781,7 +781,7 @@ class MIMOGeneralDotProductAttention(nn.Module):
 class DLASeg(nn.Module):
     def __init__(self, base_name, heads, pretrained, down_ratio, final_kernel,
                  last_level, head_conv, out_channel=0, message_mode='NO_MESSAGE', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique',
-                 feat_mode='inter', feat_shape=[192, 352], round=1):
+                 feat_mode='inter', feat_shape=[192, 352], round=1, compression_flag=False):
         super(DLASeg, self).__init__()
         assert down_ratio in [2, 4, 8, 16]
         self.first_level = int(np.log2(down_ratio))
@@ -950,7 +950,8 @@ class DLASeg(nn.Module):
             for c_layer in self.trans_layer:
                 if c_layer >= 0:
                     weight_net = []
-                    in_channels = [64*2**c_layer*3, 32*3, 1]
+                    # in_channels = [64*2**c_layer*3, 32*3, 1]
+                    in_channels = [64*2**c_layer*2, 32*3, 1]
                     for i in range(len(in_channels)-1):
                         weight_net.append(
                             nn.Conv2d(
@@ -1015,6 +1016,7 @@ class DLASeg(nn.Module):
         d_model = 64*2**self.trans_layer[0]
         self.compressor = ScaleHyperprior(N=d_model//2, M=d_model)
         self.round = round
+        self.compression_flag = compression_flag
         self.vis = False #True #
     
     def add_coord_map(self, input, normalized=True):
@@ -1236,9 +1238,9 @@ class DLASeg(nn.Module):
             x[c_layer] = post_commu_feats
         return x, weight_mats, val_feats
 
-    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1, fusion='context', compress_flag=True):
+    def QUALITYMAP_MESSAGE(self, x, shift_mats, round=1, fusion='context', compress_flag=False):
         
-        def _message_packing(val_feats, quality_maps, confidence_maps, compress_flag=True):
+        def _message_packing(val_feats, quality_maps, confidence_maps, compress_flag=False):
             b, k_agents, q_agents, c, h, w = val_feats.shape
 
             # compression
@@ -1262,6 +1264,7 @@ class DLASeg(nn.Module):
                     recon_feat = comp_out["x_hat"].clone()
                     likelihoods = comp_out["likelihoods"]
                 else:
+                    self.compressor.update()
                     comp_gt = feat_comm.clone()
                     comp_out = self.compressor.compress(feat_comm)
                     strings = comp_out["strings"]
@@ -1287,7 +1290,8 @@ class DLASeg(nn.Module):
             context_feat_mask = context_feat_mask.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() - context_feat_mask
             context_feat = val_feat.sum(dim=1).unsqueeze(1).expand(-1, num_agents, -1, -1, -1, -1).contiguous() # (b, k_agents, q_agents, c, h, w)
             context_feat = (context_feat-val_feat) / (context_feat_mask+1e-6)
-            weight_mat = torch.cat([query_feat, val_feat, context_feat], dim=3).view(b*num_agents*num_agents, c*3, h, w)
+            # weight_mat = torch.cat([query_feat, val_feat, context_feat], dim=3).view(b*num_agents*num_agents, c*3, h, w)
+            weight_mat = torch.cat([val_feat, context_feat], dim=3).view(b*num_agents*num_agents, c*2, h, w)
             weight_mat = self.__getattr__('weight_net'+str(c_layer))(weight_mat).sigmoid()    # (b*k_agents*q_agents, c, h, w)
             weight_mat = weight_mat.view(b, num_agents, num_agents, 1, h, w) * quality_map
             weight_mat = weight_mat / (weight_mat.sum(dim=1).unsqueeze(1) + 1e-6)
@@ -1897,9 +1901,9 @@ class DLASeg(nn.Module):
             elif self.message_mode in ['TRANSFORMER']:
                 colla_x, weight_mats, val_feats = self.TRANSFORMER_MESSAGE(single_x, shift_mats)
             elif self.message_mode in ['QualityMap']:
-                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round)
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, 'context', self.compression_flag)
             elif self.message_mode in ['QualityMapTransformer']:
-                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, fusion='transformer')
+                colla_x, weight_mats, results, quality_map, val_feat, communication_mask, comp_gt, comp_out = self.QUALITYMAP_MESSAGE(single_x, shift_mats, self.round, fusion='transformer', compress_flag=self.compression_flag)
             
             for c_layer, feat_map in enumerate(colla_x):
                 b, num_agents, c, h, w = feat_map.shape
@@ -2444,7 +2448,7 @@ class DLASeg(nn.Module):
             return self.LocalCoord_forward(images, trans_mats)
         
 
-def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352], round=1):
+def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='NO_MESSAGE_NOWARP', trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352], round=1, compression_flag=False):
     model = DLASeg('dla{}'.format(num_layers), heads,
                     pretrained=True,
                     down_ratio=down_ratio,
@@ -2458,6 +2462,7 @@ def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4, message_mode='N
                     depth_mode=depth_mode,
                     feat_mode=feat_mode,
                     feat_shape=feat_shape,
-                    round=round)
+                    round=round,
+                    compression_flag=compression_flag)
     return model
 

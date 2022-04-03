@@ -90,7 +90,8 @@ def main(opt):
 
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
-    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape, opt.round)
+    compression_flag = False if opt.train_mode=='detector' else True
+    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape, opt.round, compression_flag)
     # import ipdb; ipdb.set_trace()
     optimizer = configure_optimizers(model, opt.lr, opt.train_mode)
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)

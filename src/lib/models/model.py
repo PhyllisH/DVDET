@@ -27,7 +27,7 @@ _model_factory = {
 }
 
 
-def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352], round=1):
+def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord='Local', warp_mode='HW', depth_mode='Unique', feat_mode='inter', feat_shape=[192, 352], round=1, compression_flag=False):
     num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0
     arch = arch[:arch.find('_')] if '_' in arch else arch
     get_model = _model_factory[arch]
@@ -35,7 +35,7 @@ def create_model(arch, heads, head_conv, message_mode=0, trans_layer=[3], coord=
         print('Trans_layer: ', trans_layer)
         print('Coord: ', coord)
         model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv,\
-                             message_mode=message_mode, trans_layer=trans_layer, coord=coord, warp_mode=warp_mode, depth_mode=depth_mode, feat_mode=feat_mode, feat_shape=feat_shape, round=round)
+                             message_mode=message_mode, trans_layer=trans_layer, coord=coord, warp_mode=warp_mode, depth_mode=depth_mode, feat_mode=feat_mode, feat_shape=feat_shape, round=round, compression_flag=compression_flag)
     else:
         model = get_model(num_layers=num_layers, heads=heads, head_conv=head_conv)
     return model

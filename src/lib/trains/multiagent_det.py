@@ -344,13 +344,15 @@ class CtdetLoss(torch.nn.Module):
                     loss = loss + opt.angle_weight * single_loss['angle_single_r{}_loss'.format(i)]
             loss_stats.update(single_loss)
         
-        comp_loss += self.crit_comp(output['comp_out'], output['comp_gt'])["loss"]
-        comp_aux_loss += output['comp_aux_loss']
-        loss_stats.update({
-            'comp_loss': comp_loss,
-            'comp_aux_loss': comp_aux_loss
-        })
-        return loss, comp_loss, comp_aux_loss, loss_stats
+        if opt.train_mode in ['compressor', 'full']:
+            comp_loss += self.crit_comp(output['comp_out'], output['comp_gt'])["loss"]
+            comp_aux_loss += output['comp_aux_loss']
+            loss_stats.update({
+                'comp_loss': comp_loss,
+                'comp_aux_loss': comp_aux_loss
+            })
+            return loss, comp_loss, comp_aux_loss, loss_stats
+        return loss, loss, loss, loss_stats
 
 
 class MultiAgentDetTrainer(BaseTrainer):
@@ -377,7 +379,8 @@ class MultiAgentDetTrainer(BaseTrainer):
                 loss_states.append('off_single_r{}_loss'.format(i))
                 if opt.polygon and (opt.angle_weight > 0):
                     loss_states.append('angle_single_r{}_loss'.format(i))
-        loss_states.extend(['comp_loss', 'comp_aux_loss'])
+        if opt.train_mode in ['compressor', 'full']:
+            loss_states.extend(['comp_loss', 'comp_aux_loss'])
         loss = CtdetLoss(opt)
         return loss_states, loss
 
