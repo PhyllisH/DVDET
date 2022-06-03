@@ -1,3 +1,4 @@
+*.npy
 *.pkl
 *.txt
 *.png
