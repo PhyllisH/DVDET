@@ -24,7 +24,20 @@ def configure_optimizers(net, lr, train_mode):
         n
         for n, p in net.named_parameters()
         if not n.startswith("compressor") and p.requires_grad
+        # if not n.startswith("compressor") and ('self_attn' in n or 'norm3' in n or 'norm4' in n) and p.requires_grad
     }
+    # detector_parameters = {
+    #     n
+    #     for n, p in net.named_parameters()
+    #     if n in ['alpha', 'beta'] and p.requires_grad
+    #     # if not n.startswith("compressor") and ('self_attn' in n or 'norm3' in n or 'norm4' in n) and p.requires_grad
+    # }
+    # detector_parameters = {
+    #     n
+    #     for n, p in net.named_parameters()
+    #     if 'weight_net' in n and p.requires_grad
+    #     # if not n.startswith("compressor") and ('self_attn' in n or 'norm3' in n or 'norm4' in n) and p.requires_grad
+    # }
 
     compressor_parameters = {
         n
@@ -43,7 +56,7 @@ def configure_optimizers(net, lr, train_mode):
     union_params = compressor_parameters | compressor_aux_parameters | detector_parameters
 
     assert len(inter_params) == 0
-    assert len(union_params) - len(params_dict.keys()) == 0
+    # assert len(union_params) - len(params_dict.keys()) == 0
 
     optimizer_dict = {}
     if train_mode == 'detector':
@@ -73,7 +86,7 @@ def configure_optimizers(net, lr, train_mode):
             lr=lr,
         )
         optimizer_dict['optimizer'] = optimizer
-        optimizer_dict['compressor_aux_optimizer'] = compressor_aux_optimizer
+        # optimizer_dict['compressor_aux_optimizer'] = compressor_aux_optimizer
     return optimizer_dict
 
 def main(opt):
@@ -90,8 +103,9 @@ def main(opt):
 
     print('Creating model...')
     print('Message mode: {}'.format(opt.message_mode))
-    compression_flag = False if opt.train_mode=='detector' else True
-    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape, opt.round, compression_flag)
+    compress_flag = False if opt.train_mode=='detector' else True
+    model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, \
+                        opt.warp_mode, opt.depth_mode, opt.feat_mode, opt.feat_shape, opt.round, compress_flag, opt.comm_thre, opt.sigma)
     # import ipdb; ipdb.set_trace()
     optimizer = configure_optimizers(model, opt.lr, opt.train_mode)
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
@@ -137,6 +151,7 @@ def main(opt):
             logger.scalar_summary('train_{}'.format(k), v, epoch)
             logger.write('{} {:8f} | '.format(k, v))
         if opt.val_intervals > 0 and epoch % opt.val_intervals == 0:
+        # if opt.val_intervals > 0:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(mark)),
                        epoch, model, optimizer)
             with torch.no_grad():
@@ -156,7 +171,7 @@ def main(opt):
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(epoch)),
                        epoch, model, optimizer)
             if epoch in opt.lr_step:
-                lr = opt.lr * (0.3 ** (opt.lr_step.index(epoch) + 1))
+                lr = opt.lr * (0.1 ** (opt.lr_step.index(epoch) + 1))
                 print('Drop LR to', lr)
                 for optim in optimizer.values():
                     for param_group in optim.param_groups:

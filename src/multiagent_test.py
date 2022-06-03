@@ -59,9 +59,11 @@ class PrefetchDataset(torch.utils.data.Dataset):
     #     return images, image_idx, trans_mats
 
     def load_image_func(self, index):
-        sample_id = index // 5
+        sample_id = 54
+        cam_id = 0
+        # sample_id = index // 5
+        # cam_id = index % 5
         img_dir = self.img_dir[sample_id] if len(self.img_dir) == len(self.samples) else self.img_dir
-        cam_id = index % 5
         images_key = 'image'
         images = []
         trans_mat_list = []
@@ -204,7 +206,7 @@ def prefetch_test(opt):
         results_i = {}
     num_iters = len(dataset)
     bar = Bar('{}'.format(opt.exp_id), max=num_iters)
-    time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge']
+    time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge', 'comm_rate']
     avg_time_stats = {t: AverageMeter() for t in time_stats}
     for ind, (img_idx, pre_processed_images) in enumerate(data_loader):
         ret = detector.run(pre_processed_images, img_idx)
@@ -226,10 +228,11 @@ def prefetch_test(opt):
             ind, num_iters, total=bar.elapsed_td, eta=bar.eta_td)
         for t in avg_time_stats:
             avg_time_stats[t].update(ret[t])
-            Bar.suffix = Bar.suffix + '|{} {tm.val:.3f}s ({tm.avg:.3f}s) '.format(
+            Bar.suffix = Bar.suffix + '|{} {tm.val:.4f}s ({tm.avg:.4f}s) '.format(
                 t, tm=avg_time_stats[t])
         bar.next()
     bar.finish()
+    print('#################### comm_rate: {:.6f}s) #################### '.format(avg_time_stats['comm_rate'].avg))
 
     if opt.coord == 'Joint':
         print('######################################################')

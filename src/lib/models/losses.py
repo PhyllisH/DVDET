@@ -28,12 +28,16 @@ class RateDistortionLoss(nn.Module):
         num_pixels = N * H * W
 
         out["bpp_loss"] = sum(
-            (torch.log(likelihoods).sum() / (-math.log(2) * num_pixels))
+            (torch.log(likelihoods+1e-6).sum() / (-math.log(2) * num_pixels))
             for likelihoods in output["likelihoods"].values()
         )
         out["mse_loss"] = self.mse(output["x_hat"], target)
         out["loss"] = self.lmbda * out["mse_loss"] + out["bpp_loss"]
-
+        # print('y: {:.04f} {:.04f} {:.04f}'.format(output["likelihoods"]['y'].min(), output["likelihoods"]['y'].mean(), output["likelihoods"]['y'].max()))
+        # print('z: {:.04f} {:.04f} {:.04f}'.format(output["likelihoods"]['z'].min(), output["likelihoods"]['z'].mean(), output["likelihoods"]['z'].max()))
+        # print(output["likelihoods"]['y'])
+        # print(output["likelihoods"]['z'])
+        # print('TOT: {:.04f} MSE: {:.04f} BPP: {:.04f}'.format(out["loss"], out["mse_loss"], out["bpp_loss"]))
         return out
 
 def _slow_neg_loss(pred, gt):

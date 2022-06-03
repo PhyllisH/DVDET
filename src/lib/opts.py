@@ -83,9 +83,9 @@ class opts(object):
         # train
         self.parser.add_argument('--lr', type=float, default=1.25e-4,
                                  help='learning rate for batch size 32.')
-        self.parser.add_argument('--lr_step', type=str, default='60,80',
+        self.parser.add_argument('--lr_step', type=str, default='90,120',
                                  help='drop learning rate by 10.')
-        self.parser.add_argument('--num_epochs', type=int, default=100,
+        self.parser.add_argument('--num_epochs', type=int, default=140,
                                  help='total training epochs.')
         self.parser.add_argument('--batch_size', type=int, default=32,
                                  help='batch size')
@@ -272,6 +272,11 @@ class opts(object):
         # compressor
         self.parser.add_argument('--train_mode', default='detector',
                                  help='train the detector | compressor | all')
+        # communication graph
+        self.parser.add_argument('--comm_thre', default=0.1, type=float,
+                                 help='0-1')
+        self.parser.add_argument('--sigma', default=0.0, type=float,
+                                 help='0,0.5,1.0')
         
 
     def parse(self, args=''):

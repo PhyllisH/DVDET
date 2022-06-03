@@ -229,6 +229,7 @@ class MultiAgentDetector(BaseDetector):
 
         detections = []
         results = []
+        comm_rates = []
         for scale in self.scales:
             scale_start_time = time.time()
             if not pre_processed:
@@ -257,6 +258,7 @@ class MultiAgentDetector(BaseDetector):
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
             output, dets, forward_time = self.process(images, trans_mats, shift_mats, return_time=True)
+            comm_rates.append(output['comm_rate'].item())
 
             torch.cuda.synchronize()
             net_time += forward_time - pre_process_time
@@ -296,4 +298,4 @@ class MultiAgentDetector(BaseDetector):
 
         return {'results': results, 'tot': tot_time, 'load': load_time,
                 'pre': pre_time, 'net': net_time, 'dec': dec_time,
-                'post': post_time, 'merge': merge_time}
+                'post': post_time, 'merge': merge_time, 'comm_rate': sum(comm_rates)/len(comm_rates)}

@@ -7,6 +7,7 @@ Description:
 from __future__ import absolute_import, with_statement
 from __future__ import division
 from __future__ import print_function
+import imp
 
 import pickle as pkl
 import json
@@ -168,31 +169,33 @@ def CoordTrans(image, translation, rotation, mode='L2G', with_rotat=False, senso
     return img_warp
 
 def vis_cam(image, annos, color=(127, 255, 0), vis_thre=-1, scale=1):
-    # image = np.ones_like(image) * 255
+    # if vis_thre == -1:
+    #     image = np.zeros_like(image) * 255
     # image = np.array(image * 0.85, dtype=np.int32)
+    # image = np.array(image * 0.7, dtype=np.int32)
     # alpha = np.ones([image.shape[0], image.shape[1], 1]) * 100
     # image = np.concatenate([image, alpha], axis=-1)
     # color = (255, 255, 255)
     # color = (240, 32, 160)
-    thickness = 1
-    for anno in annos:
-        # if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
-        if (anno.get('score', 0) > vis_thre):
-            if 'corners' in anno:
-                polygon = np.array(anno['corners'][:8]).reshape([4,2])
-                polygon = polygon * scale
-                # color = (240, 32, 160) if polygon[:,0].max() < 700 else (127, 255, 0)
-                image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
-            else:
-                bbox = anno['bbox']
-                if len(bbox) == 4:
-                    bbox = [x*scale for x in bbox]
-                    x, y, w, h = bbox
-                    image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, thickness)
-                else:
-                    polygon = np.array(get_2d_polygon(np.array(bbox[:8]).reshape([4,2]).T)).reshape([4,2])
-                    polygon = polygon * scale
-                    image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
+    # thickness = 2
+    # for anno in annos:
+    #     # if (anno.get('score', 0) > vis_thre) and (not anno.get('ignore', 0)):
+    #     if (anno.get('score', 0) > vis_thre):
+    #         if 'corners' in anno:
+    #             polygon = np.array(anno['corners'][:8]).reshape([4,2])
+    #             polygon = polygon * scale
+    #             # color = (240, 32, 160) if polygon[:,0].max() < 700 else (127, 255, 0)
+    #             image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
+    #         else:
+    #             bbox = anno['bbox']
+    #             if len(bbox) == 4:
+    #                 bbox = [x*scale for x in bbox]
+    #                 x, y, w, h = bbox
+    #                 image = cv2.rectangle(image, (int(x), int(y)), (int(x + w), int(y + h)), color, thickness)
+    #             else:
+    #                 polygon = np.array(get_2d_polygon(np.array(bbox[:8]).reshape([4,2]).T)).reshape([4,2])
+    #                 polygon = polygon * scale
+    #                 image = cv2.polylines(image, pts=np.int32([polygon.reshape(-1, 1, 2)]), isClosed=True, color=color, thickness=thickness)
     return image
 
 def xywh2polygon(bbox):
@@ -275,8 +278,14 @@ def visualize_result():
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/JointCoord_Inter_DADW_WeightedDepth/results_Local.json')
 
     # COLLABORATION
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/NO_MESSAGE/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/NO_MESSAGE/results_Global.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/V2V/results_Global.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_QualityMapMessage_Translayer0_CommMask_Transformer_Weight_Updated/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_V2V_Updated/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_When2com_Updated/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_NO_MESSAGE/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_Pointwise/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_QualityMapMessage_Translayer0_CommMask_Transformer_WOPE_Repeat_Updated/results_Global.json')
 
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
@@ -285,13 +294,15 @@ def visualize_result():
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
     if coord_mode == 'Global':
-        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global_crop.json'.format(40)))
+        # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global_crop.json'.format(40)))
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/Collaboration/{}_val_instances_global_crop.json'.format(40)))
         # coco_ = coco.COCO( os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/gts_Global.json'))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances_global.json'))
         # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/train_instances_global.json'))
     else:    
-        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances.json'.format(40)))
+        # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances.json'.format(40)))
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/Collaboration/{}_val_instances.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances.json'))
     
     catIds = coco_.getCatIds()
@@ -303,10 +314,14 @@ def visualize_result():
         os.makedirs(save_path)
     
     # Vis Sample
-    samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(40)), 'rb'))['samples']
+    samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'Collaboration', '{}_val_instances_sample.pkl'.format(40)), 'rb'))['samples']
     # samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'val_instances_sample.pkl'), 'rb'))['samples']
     # samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'train_instances_sample.pkl'), 'rb'))['samples']
     for sample_id, sample in enumerate(samples):
+        if sample_id in [54]:
+            pass
+        else:
+            continue
         images_up = {}
         images_gp = {}
         images_global = {}
@@ -365,7 +380,7 @@ def visualize_result():
                 cur_cam_g[uav] = images_global[cam_name]
             cam_g = np.concatenate([x[None,:,:,:] for _, x in cur_cam_g.items()], axis=0).max(axis=0)
             cv2.imwrite('{}/{}_pred_g.png'.format(sample_save_path, cam), cam_g)
-
+        
         # cam_images = {}
         # cam_images_g = {}
         # padding = np.ones([450,20,3], dtype=np.uint8) * 255

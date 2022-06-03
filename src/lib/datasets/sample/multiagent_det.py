@@ -339,7 +339,7 @@ class MultiAgentDetDataset(data.Dataset):
             aug_imgs[index] = inp
 
             gt_det = []
-            num_objs = len(objs)
+            num_objs = min(len(objs),128)
             # worldgrid2worldcoord_mat = np.array([[500/input_w, 0, -200], [0, 500/input_h, -250], [0, 0, 1]])
             # worldgrid2worldcoord_mat = np.array([[1/input_w, 0, 0], [0, 1/input_h, 0], [0, 0, 1]])
             # worldgrid2worldcoord_mat = np.array([[1/(output_w), 0, 0], [0, 1/(output_h), 0], [0, 0, 1]])
@@ -409,6 +409,7 @@ class MultiAgentDetDataset(data.Dataset):
                     # print(wh[index, k])
                     ind[index, k] = ct_int[1] * output_w_bev + ct_int[0]
                     reg[index, k] = ct - ct_int
+                    # print('############################ {} {} ######################'.format(wh[index, k], reg[index, k]))
                     reg_mask[index, k] = 1
                     cat_spec_wh[index, k, cls_id * 2: cls_id * 2 + 2] = wh[index, k]
                     cat_spec_mask[index, k, cls_id * 2: cls_id * 2 + 2] = 1
@@ -467,7 +468,7 @@ class MultiAgentDetDataset(data.Dataset):
             img, objs_i, category_ids = info
 
             gt_det_i = []
-            num_objs = len(objs_i)
+            num_objs = min(len(objs_i),128)
             for k in range(num_objs):
                 cls_id = int(self.cat_ids[category_ids[k]])
 

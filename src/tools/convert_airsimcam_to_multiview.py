@@ -220,8 +220,8 @@ def convert_multiview_coco(town_id=1, height=40):
             data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_{}m'.format(height)
         nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
 
-    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration')):
-        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration'))
+    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox')):
+        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox'))
 
     save_dir = data_dir
     splits = ['train', 'val']
@@ -371,9 +371,9 @@ def convert_multiview_coco(town_id=1, height=40):
                                     'ignore': ignore,
                                     'segmentation': []}
                             ret_i['annotations'].append(ann)
-                            if not ignore:
-                                vehicles_i.append([x, y, w, h])
-                                category_id.append(cat_id)
+                            # if not ignore:
+                            vehicles_i.append([x, y, w, h])
+                            category_id.append(cat_id)
 
                             # img_coords = global_points_to_image(vehicle_cord.copy()[:3], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
                             # vehicle_cord_r = image_points_to_global(img_coords.copy(), cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
@@ -404,10 +404,10 @@ def convert_multiview_coco(town_id=1, height=40):
                                     'segmentation': []}
                             ret_g['annotations'].append(ann)
 
-                            if not ignore:
-                                vehicles_g.append([x, y, w, h])
-                                vehicles_g_corners.append(corners)
-                                vehicles_z.append(vehicle_z)
+                            # if not ignore:
+                            vehicles_g.append([x, y, w, h])
+                            vehicles_g_corners.append(corners)
+                            vehicles_z.append(vehicle_z)
 
                             vehicle_grid_crop = get_shift_coord(vehicle_grid.copy(), shift_mats[1])
                             x_crop, y_crop, w_crop, h_crop = get_2d_bounding_box(vehicle_grid_crop[:3])
@@ -438,10 +438,10 @@ def convert_multiview_coco(town_id=1, height=40):
         print("# images: ", len(ret_i['images']))
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
-        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances_global.json'.format(height, split))
-        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances_sample.pkl'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global.json'.format(height, split))
+        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_sample.pkl'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global_crop.json'.format(height, split))
         json.dump(ret_i, open(out_path, 'w'))
         json.dump(ret_g, open(out_global_path, 'w'))
         json.dump(ret_g_crop, open(out_global_crop_path, 'w'))
@@ -450,9 +450,9 @@ def convert_multiview_coco(town_id=1, height=40):
 def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/', ignore_flag=0, height=40):
     splits = ['train', 'val']
     for split in splits:
-        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances_global.json'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global.json'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global_crop.json'.format(height, split))
         for anno_path in [out_path, out_global_path, out_global_crop_path]:
             with open(anno_path, 'r') as f:
                 annos = json.load(f)

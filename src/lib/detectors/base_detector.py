@@ -21,7 +21,11 @@ class BaseDetector(object):
             opt.device = torch.device('cpu')
 
         print('Creating model...')
-        self.model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode)
+        print('Message mode: {}'.format(opt.message_mode))
+        compress_flag = False if opt.train_mode=='detector' else True
+        self.model = create_model(opt.arch, opt.heads, opt.head_conv, opt.message_mode, opt.trans_layer, \
+                                opt.coord, opt.warp_mode, opt.depth_mode, opt.feat_mode, \
+                                opt.feat_shape, opt.round, compress_flag, opt.comm_thre, opt.sigma)
         self.model = load_model(self.model, opt.load_model)
         self.model = self.model.to(opt.device)
         self.model.eval()
@@ -136,7 +140,6 @@ class BaseDetector(object):
             post_time += post_process_time - decode_time
 
             detections.append(dets)
-
         results = self.merge_outputs(detections)
         torch.cuda.synchronize()
         end_time = time.time()

@@ -23,7 +23,12 @@ class ModelWithLoss(torch.nn.Module):
         loss, compressor_loss, compressor_aux_loss, loss_stats = self.loss(outputs, batch)
         return outputs[-1], loss, compressor_loss, compressor_aux_loss, loss_stats
 
-
+def clip_gradient(optimizer, grad_clip):
+    for group in optimizer.param_groups:
+        torch.nn.utils.clip_grad_norm_(group["params"], grad_clip)
+        # for param in group["params"]:
+        #     if param.grad is not None:
+        #         param.grad.data.clamp_(-grad_clip, grad_clip)
 class BaseTrainer(object):
     def __init__(
             self, opt, model, optimizer=None):
@@ -84,6 +89,7 @@ class BaseTrainer(object):
 
                     compressor_loss = compressor_loss.mean()
                     compressor_loss.backward()
+                    clip_gradient(self.optimizer['compressor_optimizer'], 5)
                     self.optimizer['compressor_optimizer'].step()
 
                     compressor_aux_loss = compressor_aux_loss.mean()
@@ -91,14 +97,10 @@ class BaseTrainer(object):
                     self.optimizer['compressor_aux_optimizer'].step()
                 else:
                     self.optimizer['optimizer'].zero_grad()
-                    self.optimizer['compressor_aux_optimizer'].zero_grad()
                     tot_loss = (loss + compressor_loss).mean()
                     tot_loss.backward()
+                    clip_gradient(self.optimizer['optimizer'], 5)
                     self.optimizer['optimizer'].step()
-
-                    compressor_aux_loss = compressor_aux_loss.mean()
-                    compressor_aux_loss.backward()
-                    self.optimizer['compressor_aux_optimizer'].step()
 
 
             batch_time.update(time.time() - end)

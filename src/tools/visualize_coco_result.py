@@ -95,7 +95,7 @@ def vis_img(sensor, coco_, catIds, res_annos_all, dataset_dir, mode='Local'):
         image_gp = vis_cam_g(image_g, annos, sensor['translation'].copy(), sensor['rotation'].copy())
         image_gp = vis_cam_g(image_gp, res_annos, sensor['translation'].copy(), sensor['rotation'].copy(), color=(0, 0, 255), vis_thre=vis_score_thre)
     else:
-        # import ipdb; ipdb.set_trace()
+        import ipdb; ipdb.set_trace()
         image_u = cv2.imread(os.path.join(dataset_dir, img['file_name']))
         image_g = CoordTrans(image_u.copy(), sensor['translation'].copy(), sensor['rotation'].copy(), mode='L2G')
         image_up = vis_cam_g(image_u, annos, sensor['translation'].copy(), sensor['rotation'].copy(), mode='G2L')
@@ -178,6 +178,7 @@ def vis_cam_g(image, annos, tranlation, rotation, color=(127, 255, 0), vis_thre=
                 else:
                     polygon = np.array(bbox[:8]).reshape([4,2]).T
             else:
+                polygon = polygon * 4
                 polygon = np.array(anno['corners'][:8]).reshape([4,2]).T
             bbox_g = BoxCoordTrans(polygon.copy(), tranlation, rotation, mode)
             bbox_g = np.array(get_2d_polygon(bbox_g[:2])).reshape([4,2])
@@ -230,7 +231,12 @@ def visualize_result():
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_Baseline_MapScale2/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_800_450_Down4_BEVGT_40m_Baseline_Town5/results.json')
     # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/dla_multiagent_withwarp_GlobalCoord_GTFeatMap_352_192_Down4_BEVGT_40m_Town5_V2V_MapScale2/results.json')
-    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/results_Local.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/LocalCoord_repeat/results_Local.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_QualityMapMessage_Translayer0_CommMask_Transformer_WOPE_Repeat/results_Global.json')
+    result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_V2V_Updated/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_When2com_Updated/results_Global.json')
+    # result_path = os.path.join(os.path.dirname(__file__), '..', '..', 'exp/multiagent_det/HW_NO_MESSAGE/results_Global.json')
+
     coord_mode = 'Global' if ('Global' in result_path) or ('BEV' in result_path) else 'Local'
     print('Coord_mode: ', coord_mode)
     res_annos_all = json.load(open(result_path))
@@ -238,11 +244,11 @@ def visualize_result():
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/train_instances.json'))
     # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/annotations/val_instances.json'))
     if coord_mode == 'Global':
-        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances_global.json'.format(40)))
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/Collaboration/{}_val_instances_global.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances_global.json'))
         # coco_ = coco.COCO(os.path.join(os.path.dirname(__file__), '..', '..', 'data/airsim_camera_10scene/multiagent_annotations/train_instances_global.json'))
     else:    
-        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/{}_val_instances.json'.format(40)))
+        coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/Collaboration/{}_val_instances.json'.format(40)))
         # coco_ = coco.COCO(os.path.join(dataset_dir, 'multiagent_annotations/val_instances.json'))
     
     catIds = coco_.getCatIds()
@@ -254,7 +260,7 @@ def visualize_result():
         os.makedirs(save_path)
     
     # Vis Sample
-    samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', '{}_val_instances_sample.pkl'.format(40)), 'rb'))['samples']
+    samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'Collaboration', '{}_val_instances_sample.pkl'.format(40)), 'rb'))['samples']
     # samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'val_instances_sample.pkl'), 'rb'))['samples']
     # samples = pkl.load(open(os.path.join(dataset_dir, 'multiagent_annotations', 'train_instances_sample.pkl'), 'rb'))['samples']
     for sample_id, sample in enumerate(samples):
