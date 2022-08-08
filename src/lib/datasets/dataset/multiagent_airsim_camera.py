@@ -47,8 +47,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_60m', \
                             '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_80m'] if opt.input_dir is '' else opt.input_dir
-            if split == 'val':
-                self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+            # if split == 'val':
+            #     self.data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
                 # self.data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m/'
                 # self.data_dir = ['/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15',
@@ -161,7 +161,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             uav_heights = [uav_heights]
         
         # paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
-        paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
+        paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithNoise', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
+        # paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
         valid_paths = [x for x in paths if os.path.exists(x)]
 
         if len(valid_paths) == 1:

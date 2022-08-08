@@ -1242,11 +1242,18 @@ class DLASeg(nn.Module):
             
             b, num_agents, c, h, w = feat_map.size()
             ori_shift_mats = shift_mats[c_layer]
+            noisy_shift_mats = shift_mats[-1]
 
             # Get the value mat (shift global feature to current agent coord) # val_feat: (b, k_agents, q_agents, c, h, w)
-            shift_mats_k = ori_shift_mats.unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()  #  (b, k_agents, q_agents, 3, 3)
+            shift_mats_k = ori_shift_mats.unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous()
+            noisy_shift_mats_k = noisy_shift_mats.unsqueeze(1).expand(-1, num_agents, -1, -1, -1).contiguous()
+            for agent_i in range(num_agents):
+                noisy_shift_mats_k[:,agent_i, agent_i] = shift_mats_k[:,agent_i, agent_i]
+            shift_mats_k = shift_mats_k.view(b*num_agents*num_agents, 3, 3).contiguous()  #  (b, k_agents, q_agents, 3, 3)
+            noisy_shift_mats_k = noisy_shift_mats_k.view(b*num_agents*num_agents, 3, 3).contiguous()  #  (b, k_agents, q_agents, 3, 3)
             shift_mats_q = torch.inverse(ori_shift_mats.unsqueeze(2).expand(-1, -1, num_agents, -1, -1).contiguous()).contiguous().view(b*num_agents*num_agents, 3, 3).contiguous()   # (b, k_agents, q_agents, 3, 3)
-            cur_shift_mats = shift_mats_k @ shift_mats_q    # (b*k_agents*q_agents, 3, 3)
+            # cur_shift_mats = shift_mats_k @ shift_mats_q    # (b*k_agents*q_agents, 3, 3)
+            cur_shift_mats = noisy_shift_mats_k @ shift_mats_q    # (b*k_agents*q_agents, 3, 3)
 
             global_feat = feat_map.view(b, num_agents, c, h, w).contiguous().unsqueeze(2).expand(-1, -1, num_agents, -1, -1, -1)
             global_feat = global_feat.contiguous().view(b*num_agents*num_agents, c, h, w).contiguous()

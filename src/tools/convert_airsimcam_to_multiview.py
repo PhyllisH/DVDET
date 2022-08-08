@@ -144,13 +144,19 @@ def UAVtoUAV(UAV_I1, T1, T2):
 #                'scene_13', 'scene_14']
 # val_split = [ 'scene_5']
 
+# train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
+#                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
+#                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
+#                'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
+#                'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+
 train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
-               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
-               'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33']
 
-val_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
+val_split = ['scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+test_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
 
 town_config = OrderedDict()
 town_config[0] = {
@@ -172,6 +178,7 @@ town_config[2] = {
     'world_Y_left': 500
 }
 
+noise_pattern = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
 
 def convert_multiview_coco(town_id=1, height=40):
     ##################### Get category info ###############
@@ -220,12 +227,13 @@ def convert_multiview_coco(town_id=1, height=40):
             data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_{}m'.format(height)
         nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
 
-    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox')):
-        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox'))
+    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'ForCount')):
+        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'ForCount'))
 
     save_dir = data_dir
-    splits = ['train', 'val']
-    scene_split = {'train': train_split, 'val': val_split}
+    # splits = ['train', 'val', 'test']
+    splits = ['test']
+    scene_split = {'train': train_split, 'val': val_split, 'test': test_split}
     image_id = 0
     bbox_id = 0
 
@@ -279,6 +287,15 @@ def convert_multiview_coco(town_id=1, height=40):
                         cur_UAV_sample['trans_mat'] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                       calibrated_record["rotation"].copy(),
                                                       camera_intrinsic) @ worldgrid2worldcoord_mat
+                        noise_sample = []
+                        for noise in noise_pattern:
+                            noise_sample.append(np.random.normal(0, noise, 3))
+                        
+                        for n_i, n_s in enumerate(noise_sample):
+                            cur_UAV_sample['trans_mat_withnoise{:01d}'.format(int(noise_pattern[n_i]*10))] = get_imgcoord_matrices(calibrated_record["translation"].copy()+n_s,
+                                                      calibrated_record["rotation"].copy(),
+                                                      camera_intrinsic) @ worldgrid2worldcoord_mat
+
                         # for z0 in [0.5, 1.0, 1.5]:
                         for z0 in [-1.0, -0.5, 0.5, 0.75, 1.0, 1.5, 2.0, 8.0]:
                             if z0 < 0:
@@ -288,6 +305,10 @@ def convert_multiview_coco(town_id=1, height=40):
                             cur_UAV_sample[z_key] = get_imgcoord_matrices(calibrated_record["translation"].copy(),
                                                         calibrated_record["rotation"].copy(),
                                                         camera_intrinsic, z0=z0) @ worldgrid2worldcoord_mat
+                            for n_i, n_s in enumerate(noise_sample):
+                                cur_UAV_sample['{}_withnoise{:01d}'.format(z_key, int(noise_pattern[n_i]*10))] = get_imgcoord_matrices(calibrated_record["translation"].copy()+n_s,
+                                                        calibrated_record["rotation"].copy(),
+                                                        camera_intrinsic) @ worldgrid2worldcoord_mat
                         im_position = calibrated_record["translation"].copy()
                         im_position[2] = -im_position[2]
                         im_rotation = calibrated_record["rotation"].copy()
@@ -341,6 +362,17 @@ def convert_multiview_coco(town_id=1, height=40):
                             shift_mats[scale] = cur_shift_mat
                         cur_UAV_sample['shift_mats'] = shift_mats
 
+                        shift_mats_withnoise = OrderedDict()
+                        for n_i, n_s in enumerate(noise_sample):
+                            shift_mats_withnoise[noise_pattern[n_i]] = OrderedDict()
+                            for scale in [1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 32, 64]:
+                                cur_shift_mat = get_crop_shift_mat(tranlation=calibrated_record["translation"].copy()+n_s, \
+                                                                rotation=calibrated_record["rotation"].copy(), \
+                                                                sensor_type=UAV_cam, map_scale_w=scale, map_scale_h=scale, \
+                                                                world_X_left=world_X_left, world_Y_left=world_Y_left)
+                                shift_mats_withnoise[noise_pattern[n_i]][scale] = cur_shift_mat
+                        cur_UAV_sample['shift_mats_withnoise'] = shift_mats_withnoise
+
                         # vehicle info
                         # cat_id = 2 if UAV_cam == 'BOTTOM' else 1
                         cat_id = 1
@@ -371,9 +403,9 @@ def convert_multiview_coco(town_id=1, height=40):
                                     'ignore': ignore,
                                     'segmentation': []}
                             ret_i['annotations'].append(ann)
-                            # if not ignore:
-                            vehicles_i.append([x, y, w, h])
-                            category_id.append(cat_id)
+                            if not ignore:
+                                vehicles_i.append([x, y, w, h])
+                                category_id.append(cat_id)
 
                             # img_coords = global_points_to_image(vehicle_cord.copy()[:3], cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic)
                             # vehicle_cord_r = image_points_to_global(img_coords.copy(), cur_UAV_sample['translation'].copy(), cur_UAV_sample['rotation'].copy(), camera_intrinsic, z0=vehicle_cord.copy()[2:3])
@@ -404,10 +436,10 @@ def convert_multiview_coco(town_id=1, height=40):
                                     'segmentation': []}
                             ret_g['annotations'].append(ann)
 
-                            # if not ignore:
-                            vehicles_g.append([x, y, w, h])
-                            vehicles_g_corners.append(corners)
-                            vehicles_z.append(vehicle_z)
+                            if not ignore:
+                                vehicles_g.append([x, y, w, h])
+                                vehicles_g_corners.append(corners)
+                                vehicles_z.append(vehicle_z)
 
                             vehicle_grid_crop = get_shift_coord(vehicle_grid.copy(), shift_mats[1])
                             x_crop, y_crop, w_crop, h_crop = get_2d_bounding_box(vehicle_grid_crop[:3])
@@ -438,10 +470,10 @@ def convert_multiview_coco(town_id=1, height=40):
         print("# images: ", len(ret_i['images']))
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
-        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global.json'.format(height, split))
-        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_sample.pkl'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global.json'.format(height, split))
+        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_sample.pkl'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
         json.dump(ret_i, open(out_path, 'w'))
         json.dump(ret_g, open(out_global_path, 'w'))
         json.dump(ret_g_crop, open(out_global_crop_path, 'w'))
@@ -450,9 +482,9 @@ def convert_multiview_coco(town_id=1, height=40):
 def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/', ignore_flag=0, height=40):
     splits = ['train', 'val']
     for split in splits:
-        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global.json'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithignoredBox/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global.json'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
         for anno_path in [out_path, out_global_path, out_global_crop_path]:
             with open(anno_path, 'r') as f:
                 annos = json.load(f)
@@ -467,6 +499,48 @@ def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/', ign
             with open(save_path, 'w') as f:
                 json.dump(annos, f)
 
+def count():
+    splits = ['train', 'val', 'test']
+    scene_split = {'train': train_split, 'val': val_split, 'test': test_split}
+    for split in splits:
+        image_counts = []
+        annos_counts = []
+        annos_3d_counts = []
+        for height in [40, 60, 80]:
+            for town_id in [0, 1, 2]:
+                if town_id == 0:
+                    data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+                    nusc = NuScenes(version='v1.0-mini', dataroot=data_dir, verbose=True)
+                elif town_id == 1:
+                    data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+                    nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
+                else:
+                    data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_{}m'.format(height)
+                    nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
+                
+                for scene in tqdm(nusc.scene):
+                    if not scene["name"] in scene_split[split]:
+                        continue
+                    else:
+                        cur_sample_token = scene['first_sample_token']
+                        while cur_sample_token != "":
+                            cur_sample = nusc.get("sample", cur_sample_token)
+                            anno_tokens = cur_sample["anns"]
+                            annos_3d_counts.append(len(anno_tokens))
+                            cur_sample_token = cur_sample['next']
+            
+                anno_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
+                if os.path.exists(anno_path):
+                    with open(anno_path, 'r') as f:
+                        annos = json.load(f)
+                    images = len(annos['images'])
+                    annotations =  len(annos['annotations'])
+                    print(anno_path, height, split, images, annotations)
+                    image_counts.append(images)
+                    annos_counts.append(annotations)
+        print(split, sum(image_counts), sum(annos_counts), sum(annos_3d_counts))
+
+
 if __name__ == '__main__':
     # convert_multiview_coco(town_id=0, height=40)
     # convert_multiview_coco(town_id=1, height=40)
@@ -477,13 +551,17 @@ if __name__ == '__main__':
     # convert_multiview_coco(town_id=2, height=60)
     # convert_multiview_coco(town_id=2, height=80)
     # convert_multiview_coco()
-    town_ids = [0,1,2]
-    for town_id in town_ids:
-        if town_id == 0:
-            data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
-        elif town_id == 1:
-            data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
-        elif town_id == 2:
-            data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m'
+    # town_ids = [0,1,2]
+    # for town_id in town_ids:
+    #     if town_id == 0:
+    #         data_dir = '/GPFS/data/yhu/Dataset/airsim_camera/airsim_camera_seg_15'
+    #     elif town_id == 1:
+    #         data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town6_v2'
+    #     elif town_id == 2:
+    #         data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_40m'
 
-        pop_ignored_box(data_dir, ignore_flag=0)
+    #     # pop_ignored_box(data_dir, ignore_flag=0, height=40)
+    #     count(data_dir, height=40)
+    #     count(data_dir, height=60)
+    #     count(data_dir, height=80)
+    count()

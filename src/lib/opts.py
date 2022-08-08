@@ -278,6 +278,9 @@ class opts(object):
         self.parser.add_argument('--sigma', default=0.0, type=float,
                                  help='0,0.5,1.0')
         
+        self.parser.add_argument('--noise', default=0.0, type=float,
+                                 help='0,0.1,0.2,0.3,0.4,0.5,0.6')
+        
 
     def parse(self, args=''):
         if args == '':

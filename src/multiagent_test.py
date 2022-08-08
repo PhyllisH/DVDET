@@ -59,10 +59,10 @@ class PrefetchDataset(torch.utils.data.Dataset):
     #     return images, image_idx, trans_mats
 
     def load_image_func(self, index):
-        sample_id = 54
-        cam_id = 0
-        # sample_id = index // 5
-        # cam_id = index % 5
+        # sample_id = 54
+        # cam_id = 0
+        sample_id = index // 5
+        cam_id = index % 5
         img_dir = self.img_dir[sample_id] if len(self.img_dir) == len(self.samples) else self.img_dir
         images_key = 'image'
         images = []
@@ -79,6 +79,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
         shift_mats_2_list = []
         shift_mats_4_list = []
         shift_mats_8_list = []
+        trans_mats_list_withnoise = []
+        shift_mats_list_withnoise = []
         image_idx = []
         cams_list = [x for x in self.samples[sample_id].keys() if not x.startswith('vehicles')]
         # cam_list = random.sample([x for x in cams_list if not x.startswith(cams_list[cam_id])], self.opt.num_agents-1) + [cams_list[cam_id]]
@@ -113,6 +115,12 @@ class PrefetchDataset(torch.utils.data.Dataset):
                 shift_mats_2_list.append(np.array(info['shift_mats'][2*self.opt.map_scale], dtype=np.float32))
                 shift_mats_4_list.append(np.array(info['shift_mats'][4*self.opt.map_scale], dtype=np.float32))
                 shift_mats_8_list.append(np.array(info['shift_mats'][8*self.opt.map_scale], dtype=np.float32))
+                if self.opt.noise > 0:
+                    trans_mats_list_withnoise.append(np.array(info['trans_mat_withnoise{:01d}'.format(int(self.opt.noise*10))], dtype=np.float32))
+                    shift_mats_list_withnoise.append(np.array(info['shift_mats_withnoise'][self.opt.noise][2**self.opt.trans_layer[-1]], dtype=np.float32))
+                else:
+                    trans_mats_list_withnoise.append(np.array(info['trans_mat'], dtype=np.float32))
+                    shift_mats_list_withnoise.append(np.array(info['shift_mats'][1*self.opt.map_scale], dtype=np.float32))
         trans_mats = np.concatenate([x[None,:,:] for x in trans_mat_list], axis=0)
         trans_mats_n010 = np.concatenate([x[None,:,:] for x in trans_mats_n010_list], axis=0)
         trans_mats_n005 = np.concatenate([x[None,:,:] for x in trans_mats_n005_list], axis=0)
@@ -126,8 +134,23 @@ class PrefetchDataset(torch.utils.data.Dataset):
         shift_mats_2 = np.concatenate([x[None,:,:] for x in shift_mats_2_list], axis=0)
         shift_mats_4 = np.concatenate([x[None,:,:] for x in shift_mats_4_list], axis=0)
         shift_mats_8 = np.concatenate([x[None,:,:] for x in shift_mats_8_list], axis=0)
-        return images, image_idx, [trans_mats, trans_mats_n010, trans_mats_n005, trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080],\
-                        [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8]
+
+        trans_mats_withnoise = np.concatenate([x[None,:,:] for x in trans_mats_list_withnoise], axis=0)
+        shift_mats_withnoise = np.concatenate([x[None,:,:] for x in shift_mats_list_withnoise], axis=0)
+        
+        # if self.opt.noise > 0:
+        #     trans_mats = trans_mats_withnoise
+        #     if self.opt.trans_layer in [0,-2]:
+        #         shift_mats_1 = shift_mats_withnoise
+        #     elif self.opt.trans_layer == 1:
+        #         shift_mats_2 = shift_mats_withnoise
+        #     elif self.opt.trans_layer == 2:
+        #         shift_mats_4 = shift_mats_withnoise
+        #     elif self.opt.trans_layer == 3:
+        #         shift_mats_8 = shift_mats_withnoise
+
+        return images, image_idx, [trans_mats, trans_mats_n010, trans_mats_n005, trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080, trans_mats_withnoise],\
+                        [shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, shift_mats_withnoise]
 
     def load_sample_func(self, index):
         info = self.samples[index]
@@ -174,7 +197,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
                             'trans_mats': trans_mats[0], 'trans_mats_n010': trans_mats[1], 'trans_mats_n005': trans_mats[2], 'trans_mats_p005': trans_mats[3],\
                             'trans_mats_p007': trans_mats[4], 'trans_mats_p010': trans_mats[5], 'trans_mats_p015': trans_mats[6], 'trans_mats_p020': trans_mats[7],\
                             'trans_mats_p080': trans_mats[8], \
-                            'shift_mats_1': shift_mats[0], 'shift_mats_2': shift_mats[1], 'shift_mats_4': shift_mats[2], 'shift_mats_8': shift_mats[3]}
+                            'shift_mats_1': shift_mats[0], 'shift_mats_2': shift_mats[1], 'shift_mats_4': shift_mats[2], 'shift_mats_8': shift_mats[3],
+                            'trans_mats_withnoise': trans_mats[-1], 'shift_mats_withnoise': shift_mats[-1]}
 
     def __len__(self):
         if 'NO_MESSAGE' in self.opt.message_mode:

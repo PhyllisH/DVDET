@@ -10,6 +10,8 @@ round=1
 comm_thre=0
 trans_layer='0'
 
+noise=('0.0' '0.1' '0.2' '0.3' '0.4' '0.5' '0.6')
+
 # HW_NO_MESSAGE
 # trans_layer='-2'
 # epoch='80'
@@ -22,9 +24,9 @@ trans_layer='0'
 # message_mode='Pointwise'
 
 # HW_When2com
-# epoch='last'
-# exp_id='HW_When2com'
-# message_mode='When2com'
+epoch='last'
+exp_id='HW_When2com'
+message_mode='When2com'
 
 # HW_V2V
 # trans_layer='2'
@@ -76,17 +78,17 @@ trans_layer='0'
 # exp_id='HW_Concat_Rebuttal'
 # message_mode='Concat'
 
-for i in ${epoch[*]}
+for i in ${noise[*]}
 do
     echo $i
     CUDA_VISIBLE_DEVICES=$gpu_id python multiagent_test.py multiagent_det \
         --exp_id $exp_id \
-        --load_model '../exp/multiagent_det/'$exp_id'/model_'$i'.pth' \
+        --load_model '../exp/multiagent_det/'$exp_id'/model_'$epoch'.pth' \
         --gpus $gpu_id --coord=$coord --uav_height=40 \
         --feat_mode=$feat_mode --polygon \
         --map_scale=1.0 --warp_mode=$warp_mode --depth_mode=$depth_mode \
         --message_mode=$message_mode --trans_layer=$trans_layer --round=$round --with_occluded \
-        --comm_thre=$comm_thre
+        --comm_thre=$comm_thre --noise=$i
     
     # CUDA_VISIBLE_DEVICES=$gpu_id python multiagent_test.py multiagent_det \
     #     --exp_id $exp_id \

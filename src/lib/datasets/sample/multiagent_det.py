@@ -181,6 +181,7 @@ class MultiAgentDetDataset(data.Dataset):
         vehicles_z = []
         category_idx = []
         trans_mats_list = []
+        trans_mats_list_withnoise = []
         trans_mats_list_n010 = []
         trans_mats_list_n005 = []
         trans_mats_list_p005 = []
@@ -193,6 +194,7 @@ class MultiAgentDetDataset(data.Dataset):
         shift_mats_list_2 = []
         shift_mats_list_4 = []
         shift_mats_list_8 = []
+        shift_mats_list_withnoise = []
         scale = self.opt.map_scale
         depth_list = np.array([0, -1.0, -0.5, 0.5, 0.75, 1.0, 1.5, 2.0, 8.0])
         if num_images == 1:
@@ -248,6 +250,14 @@ class MultiAgentDetDataset(data.Dataset):
                     shift_mats_list_4.append(info['shift_mats'][4*scale])
                     shift_mats_list_8.append(info['shift_mats'][8*scale])
                     vehicles_z.append(info['vehicles_z'])
+
+                    if self.opt.noise > 0:
+                        trans_mats_list_withnoise.append(info['trans_mat_withnoise{:01d}'.format(int(self.opt.noise*10))])
+                        shift_mats_list_withnoise.append(info['shift_mats_withnoise'][self.opt.noise][2**self.opt.trans_layer[-1]])
+                    else:
+                        trans_mats_list_withnoise.append(info['trans_mat'])
+                        shift_mats_list_withnoise.append(info['shift_mats'][1*scale])
+
         trans_mats_list = np.concatenate([x[None,:,:] for x in trans_mats_list], axis=0)
         trans_mats_list_n010 = np.concatenate([x[None,:,:] for x in trans_mats_list_n010], axis=0)
         trans_mats_list_n005 = np.concatenate([x[None,:,:] for x in trans_mats_list_n005], axis=0)
@@ -261,6 +271,10 @@ class MultiAgentDetDataset(data.Dataset):
         shift_mats_list_2 = np.concatenate([x[None,:,:] for x in shift_mats_list_2], axis=0)
         shift_mats_list_4 = np.concatenate([x[None,:,:] for x in shift_mats_list_4], axis=0)
         shift_mats_list_8 = np.concatenate([x[None,:,:] for x in shift_mats_list_8], axis=0)
+        
+        trans_mats_list_withnoise = np.concatenate([x[None,:,:] for x in trans_mats_list_withnoise], axis=0)
+        shift_mats_list_withnoise = np.concatenate([x[None,:,:] for x in shift_mats_list_withnoise], axis=0)
+
         height, width = images[0].shape[0], images[0].shape[1]
         # Use the same aug for the images in the same sample
         c, s, flipped, trans_input, trans_output, input_h, input_w, output_h, output_w = self.get_aug(height, width)
@@ -307,6 +321,9 @@ class MultiAgentDetDataset(data.Dataset):
         shift_mats_2 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_4 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         shift_mats_8 = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+
+        trans_mats_withnoise = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
+        shift_mats_withnoise = np.eye(3, dtype=np.float32)[None,].repeat(num_images, axis=0)
         
         trans_mats[:min(num_images, len(trans_mats_list))] = trans_mats_list[:min(num_images, len(trans_mats_list))]
         trans_mats_n010[:min(num_images, len(trans_mats_list))] = trans_mats_list_n010[:min(num_images, len(trans_mats_list))]
@@ -321,6 +338,9 @@ class MultiAgentDetDataset(data.Dataset):
         shift_mats_2[:min(num_images, len(trans_mats_list))] = shift_mats_list_2[:min(num_images, len(shift_mats_2))]
         shift_mats_4[:min(num_images, len(trans_mats_list))] = shift_mats_list_4[:min(num_images, len(shift_mats_4))]
         shift_mats_8[:min(num_images, len(trans_mats_list))] = shift_mats_list_8[:min(num_images, len(shift_mats_8))]
+
+        trans_mats_withnoise[:min(num_images, len(trans_mats_list))] = trans_mats_list_withnoise[:min(num_images, len(trans_mats_list))]
+        shift_mats_withnoise[:min(num_images, len(trans_mats_list))] = shift_mats_list_withnoise[:min(num_images, len(shift_mats_8))]
 
         gt_dets = []
         for index, info in enumerate(zip(images, vehicles, vehicles_i, vehicles_z, category_idx)):
@@ -517,7 +537,18 @@ class MultiAgentDetDataset(data.Dataset):
             #     heatmap = (hm_i[index,0].reshape([output_h, output_w, 1]).repeat(3, axis=-1)*255).astype('uint8')
             #     img_warp = cv2.addWeighted(heatmap, 0.5, img_warp, 1-0.5, 0)
             #     cv2.imwrite('ori_warp_UAV.png', img_warp)
-
+        
+        if self.opt.noise > 0:
+            trans_mats = trans_mats_withnoise
+            if self.opt.trans_layer == 0:
+                shift_mats_1 = shift_mats_withnoise
+            elif self.opt.trans_layer == 1:
+                shift_mats_2 = shift_mats_withnoise
+            elif self.opt.trans_layer == 2:
+                shift_mats_4 = shift_mats_withnoise
+            elif self.opt.trans_layer == 3:
+                shift_mats_8 = shift_mats_withnoise
+        
         return c, s, aug_imgs, trans_mats, trans_mats_n005, trans_mats_n010,\
                     trans_mats_p005, trans_mats_p007, trans_mats_p010, trans_mats_p015, trans_mats_p020, trans_mats_p080,\
                     shift_mats_1, shift_mats_2, shift_mats_4, shift_mats_8, \

@@ -248,9 +248,10 @@ class MultiAgentDetector(BaseDetector):
                                 pre_processed_images['trans_mats_n005'], pre_processed_images['trans_mats_p005'],\
                                 pre_processed_images['trans_mats_p007'], pre_processed_images['trans_mats_p010'],\
                                 pre_processed_images['trans_mats_p015'], pre_processed_images['trans_mats_p020'],\
-                                pre_processed_images['trans_mats_p080']]
+                                pre_processed_images['trans_mats_p080'], pre_processed_images['trans_mats_withnoise']]
                 shift_mats = [pre_processed_images['shift_mats_1'], pre_processed_images['shift_mats_2'], \
-                                pre_processed_images['shift_mats_4'], pre_processed_images['shift_mats_8']]
+                                pre_processed_images['shift_mats_4'], pre_processed_images['shift_mats_8'], \
+                                pre_processed_images['shift_mats_withnoise']]
             images = images.to(self.opt.device)
             trans_mats = [x.to(self.opt.device) for x in trans_mats]
             shift_mats = [x.to(self.opt.device) for x in shift_mats]
