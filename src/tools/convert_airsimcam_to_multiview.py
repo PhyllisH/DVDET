@@ -144,19 +144,19 @@ def UAVtoUAV(UAV_I1, T1, T2):
 #                'scene_13', 'scene_14']
 # val_split = [ 'scene_5']
 
-# train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
-#                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
-#                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
-#                'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
-#                'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
-
 train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
-               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33']
+               'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33',
+               'scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
 
-val_split = ['scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
-test_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
+# train_split = ['scene_2', 'scene_4', 'scene_5', 'scene_7', 'scene_8', 'scene_10', 
+#                'scene_11', 'scene_12', 'scene_13', 'scene_14', 'scene_15', 'scene_18', 
+#                'scene_19', 'scene_21', 'scene_22', 'scene_23', 'scene_24', 'scene_25', 
+#                'scene_26', 'scene_27', 'scene_28', 'scene_30', 'scene_32', 'scene_33']
+
+# val_split = ['scene_0', 'scene_6', 'scene_17', 'scene_20', 'scene_29']
+val_split = ['scene_1', 'scene_3', 'scene_9', 'scene_16', 'scene_31']
 
 town_config = OrderedDict()
 town_config[0] = {
@@ -178,7 +178,7 @@ town_config[2] = {
     'world_Y_left': 500
 }
 
-noise_pattern = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+noise_pattern = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]
 
 def convert_multiview_coco(town_id=1, height=40):
     ##################### Get category info ###############
@@ -227,13 +227,15 @@ def convert_multiview_coco(town_id=1, height=40):
             data_dir = '/GPFS/data/shfang/dataset/airsim_camera/airsim_camera_seg_town4_v2_{}m'.format(height)
         nusc = NuScenes(version='v1.0-{}m-group'.format(height), dataroot=data_dir, verbose=True)
 
-    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'ForCount')):
-        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'ForCount'))
+    if not os.path.exists(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithNoise')):
+        os.makedirs(os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithNoise'))
 
     save_dir = data_dir
     # splits = ['train', 'val', 'test']
-    splits = ['test']
-    scene_split = {'train': train_split, 'val': val_split, 'test': test_split}
+    # splits = ['test']
+    splits = ['train', 'val']
+    # scene_split = {'train': train_split, 'val': val_split, 'test': test_split}
+    scene_split = {'train': train_split, 'val': val_split}
     image_id = 0
     bbox_id = 0
 
@@ -470,10 +472,10 @@ def convert_multiview_coco(town_id=1, height=40):
         print("# images: ", len(ret_i['images']))
         print("# annotations: ", len(ret_i['annotations']))
         # out_path = 'C:/Users/35387/Desktop/airsim_camera_demo/airsim_instances_{}.json'.format(split)
-        out_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global.json'.format(height, split))
-        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_sample.pkl'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_global.json'.format(height, split))
+        out_sample_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_sample.pkl'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_global_crop.json'.format(height, split))
         json.dump(ret_i, open(out_path, 'w'))
         json.dump(ret_g, open(out_global_path, 'w'))
         json.dump(ret_g_crop, open(out_global_crop_path, 'w'))
@@ -482,9 +484,9 @@ def convert_multiview_coco(town_id=1, height=40):
 def pop_ignored_box(data_dir='/DATA7_DB7/data/shfang/airsim_camera_seg_15/', ignore_flag=0, height=40):
     splits = ['train', 'val']
     for split in splits:
-        out_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances.json'.format(height, split))
-        out_global_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global.json'.format(height, split))
-        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
+        out_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances.json'.format(height, split))
+        out_global_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_global.json'.format(height, split))
+        out_global_crop_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_global_crop.json'.format(height, split))
         for anno_path in [out_path, out_global_path, out_global_crop_path]:
             with open(anno_path, 'r') as f:
                 annos = json.load(f)
@@ -529,7 +531,7 @@ def count():
                             annos_3d_counts.append(len(anno_tokens))
                             cur_sample_token = cur_sample['next']
             
-                anno_path = os.path.join(data_dir, 'multiagent_annotations/ForCount/{}_{}_instances_global_crop.json'.format(height, split))
+                anno_path = os.path.join(data_dir, 'multiagent_annotations/Collaboration_WithNoise/{}_{}_instances_global_crop.json'.format(height, split))
                 if os.path.exists(anno_path):
                     with open(anno_path, 'r') as f:
                         annos = json.load(f)
@@ -542,7 +544,7 @@ def count():
 
 
 if __name__ == '__main__':
-    # convert_multiview_coco(town_id=0, height=40)
+    convert_multiview_coco(town_id=0, height=40)
     # convert_multiview_coco(town_id=1, height=40)
     # convert_multiview_coco(town_id=1, height=60)
     # convert_multiview_coco(town_id=1, height=80)
@@ -564,4 +566,4 @@ if __name__ == '__main__':
     #     count(data_dir, height=40)
     #     count(data_dir, height=60)
     #     count(data_dir, height=80)
-    count()
+    # count()

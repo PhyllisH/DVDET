@@ -10,7 +10,8 @@ round=1
 comm_thre=0
 trans_layer='0'
 
-noise=('0.0' '0.1' '0.2' '0.3' '0.4' '0.5' '0.6')
+# noise=('0.0' '0.1' '0.2' '0.3' '0.4' '0.5' '0.6')
+noise=('0.7' '0.8' '0.9' '1.0' '1.1' '1.2' '1.3' '1.4' '1.5')
 
 # HW_NO_MESSAGE
 # trans_layer='-2'
@@ -24,9 +25,9 @@ noise=('0.0' '0.1' '0.2' '0.3' '0.4' '0.5' '0.6')
 # message_mode='Pointwise'
 
 # HW_When2com
-# epoch='last'
-# exp_id='HW_When2com'
-# message_mode='When2com'
+epoch='last'
+exp_id='HW_When2com'
+message_mode='When2com'
 
 # HW_V2V
 # trans_layer='2'
@@ -62,9 +63,9 @@ noise=('0.0' '0.1' '0.2' '0.3' '0.4' '0.5' '0.6')
 # message_mode='QualityMapTransformerWeight'
 
 # BEST
-epoch='last'
-exp_id='HW_QualityMapMessage_Translayer0_CommMask_Transformer_Rebuttal_N1'
-message_mode='QualityMapTransformer'
+# epoch='best'
+# exp_id='HW_QualityMapMessage_Translayer0_CommMask_Transformer_MultiRound_VaringThre_Repeat3'
+# message_mode='QualityMapTransformer'
 
 # HW_Max
 # trans_layer='2'
