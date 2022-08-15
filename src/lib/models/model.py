@@ -17,12 +17,6 @@ from .networks.resnet_dcn import get_pose_net as get_pose_net_dcn
 from .networks.large_hourglass import get_large_hourglass_net
 # from .networks.multiagent_pose_dla_dcn import get_pose_net as get_multiagent_dla_dcn
 from .networks.multiagent_pose_dla_dcn_noise import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_comm import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_modulation import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_diffpara import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_Gaussian import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_bandwidthaware_GumbleNoise import get_pose_net as get_multiagent_dla_dcn
-# from .networks.multiagent_pose_dla_dcn_bandwidthaware import get_pose_net as get_multiagent_dla_dcn
 
 _model_factory = {
     'res': get_pose_net,  # default Resnet with deconv
