@@ -161,7 +161,8 @@ class MULTIAGENTAIRSIMCAM(data.Dataset):
             uav_heights = [uav_heights]
         
         # paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
-        paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithNoise', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
+        # paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithNoise', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
+        paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_Where2comm_Cropped', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
         # paths = [os.path.join(data_dir, 'multiagent_annotations', 'Collaboration_WithignoredBox', '{}_{}_{}'.format(uav_height, split, tail)) for data_dir in data_dirs for uav_height in uav_heights]
         valid_paths = [x for x in paths if os.path.exists(x)]
 

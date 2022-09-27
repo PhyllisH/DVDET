@@ -353,7 +353,8 @@ class opts(object):
         else:
             input_h, input_w = dataset.default_resolution
         
-        opt.feat_shape = [96, 128] if opt.real else [192, 352]
+        # opt.feat_shape = [96, 128] if opt.real else [192, 352]
+        opt.feat_shape = [96, 128] if opt.real else [96, 192] # [192, 352]
         opt.mean, opt.std = dataset.mean, dataset.std
         opt.num_classes = dataset.num_classes
 
