@@ -106,13 +106,15 @@ def run_polygon_eval(anno_path_cocoformat, det_path_cocoformat):
     else:
         gt_annos = anno_path_cocoformat
 
-    
     det_evalformat = todict(det_results)
     gt_evalformat = todict(gt_annos['annotations'])
-
+    updated_gt_evalformat = OrderedDict()
     for image_id in det_evalformat:
-        if image_id not in gt_evalformat:
-            gt_evalformat[image_id] = {}
+        if image_id in gt_evalformat:
+            updated_gt_evalformat.update({image_id: gt_evalformat[image_id]})
+        else:
+            updated_gt_evalformat[image_id] = {}
+    gt_evalformat = updated_gt_evalformat
 
     det_evalformat = toevalformat(det_evalformat)
     gt_evalformat = toevalformat(gt_evalformat)

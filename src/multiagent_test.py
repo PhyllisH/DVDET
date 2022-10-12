@@ -59,7 +59,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
     #     return images, image_idx, trans_mats
 
     def load_image_func(self, index):
-        # sample_id = 54
+        # sample_id = index # 54
         # cam_id = 0
         sample_id = index // 5
         cam_id = index % 5
@@ -205,6 +205,7 @@ class PrefetchDataset(torch.utils.data.Dataset):
             return len(self.samples)
         else:
             return len(self.samples)*5
+            # return len(self.samples)
 
 
 def prefetch_test(opt):
