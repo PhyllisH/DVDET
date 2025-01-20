@@ -1,6 +1,5 @@
 *.npy
 *.pkl
-*.txt
 *.png
 legacy/*
 .DS_Store
@@ -11,7 +10,6 @@ debug/*
 src/.vscode/*
 preds/*
 *.h5
-*.pth
 *.checkpoint
 # Byte-compiled / optimized / DLL files
 __pycache__/

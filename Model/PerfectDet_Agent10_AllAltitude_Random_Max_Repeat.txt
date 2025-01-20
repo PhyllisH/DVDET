@@ -1,0 +1,340 @@
+20
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_20.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_20.pth, epoch 20
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.8998
+AP@0.55: 0.8754
+AP@0.60: 0.8440
+AP@0.65: 0.7897
+AP@0.70: 0.7070
+AP@0.75: 0.5687
+AP@0.80: 0.3672
+AP@0.85: 0.1431
+AP@0.90: 0.0123
+AP@0.95: 0.0001
+AP@0.5:0.95: 0.5207
+40
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_40.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_40.pth, epoch 40
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9201
+AP@0.55: 0.8979
+AP@0.60: 0.8697
+AP@0.65: 0.8201
+AP@0.70: 0.7381
+AP@0.75: 0.5810
+AP@0.80: 0.3684
+AP@0.85: 0.1386
+AP@0.90: 0.0131
+AP@0.95: 0.0001
+AP@0.5:0.95: 0.5347
+60
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_60.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_60.pth, epoch 60
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.8991
+AP@0.55: 0.8816
+AP@0.60: 0.8493
+AP@0.65: 0.7997
+AP@0.70: 0.7083
+AP@0.75: 0.5592
+AP@0.80: 0.3587
+AP@0.85: 0.1429
+AP@0.90: 0.0170
+AP@0.95: 0.0000
+AP@0.5:0.95: 0.5216
+80
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_80.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_80.pth, epoch 80
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9173
+AP@0.55: 0.9048
+AP@0.60: 0.8835
+AP@0.65: 0.8490
+AP@0.70: 0.7894
+AP@0.75: 0.6766
+AP@0.80: 0.4959
+AP@0.85: 0.2546
+AP@0.90: 0.0473
+AP@0.95: 0.0008
+AP@0.5:0.95: 0.5819
+90
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_90.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_90.pth, epoch 90
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9303
+AP@0.55: 0.9152
+AP@0.60: 0.8912
+AP@0.65: 0.8500
+AP@0.70: 0.7796
+AP@0.75: 0.6426
+AP@0.80: 0.4506
+AP@0.85: 0.2109
+AP@0.90: 0.0306
+AP@0.95: 0.0002
+AP@0.5:0.95: 0.5701
+100
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_100.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_100.pth, epoch 100
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9245
+AP@0.55: 0.9137
+AP@0.60: 0.8914
+AP@0.65: 0.8473
+AP@0.70: 0.7848
+AP@0.75: 0.6751
+AP@0.80: 0.4995
+AP@0.85: 0.2679
+AP@0.90: 0.0530
+AP@0.95: 0.0004
+AP@0.5:0.95: 0.5858
+120
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_120.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_120.pth, epoch 120
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9239
+AP@0.55: 0.9098
+AP@0.60: 0.8881
+AP@0.65: 0.8523
+AP@0.70: 0.7925
+AP@0.75: 0.6719
+AP@0.80: 0.5040
+AP@0.85: 0.2749
+AP@0.90: 0.0553
+AP@0.95: 0.0004
+AP@0.5:0.95: 0.5873
+140
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_140.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_140.pth, epoch 140
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9220
+AP@0.55: 0.9072
+AP@0.60: 0.8889
+AP@0.65: 0.8490
+AP@0.70: 0.7929
+AP@0.75: 0.6750
+AP@0.80: 0.4928
+AP@0.85: 0.2622
+AP@0.90: 0.0502
+AP@0.95: 0.0004
+AP@0.5:0.95: 0.5841
+last
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_last.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_last.pth, epoch 140
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9220
+AP@0.55: 0.9072
+AP@0.60: 0.8889
+AP@0.65: 0.8490
+AP@0.70: 0.7929
+AP@0.75: 0.6750
+AP@0.80: 0.4928
+AP@0.85: 0.2622
+AP@0.90: 0.0502
+AP@0.95: 0.0004
+AP@0.5:0.95: 0.5841
+best
+Using tensorboardX
+Fix size testing.
+training chunk_sizes: [32]
+The output will be saved to  /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+heads {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+Namespace(K=100, aggr_weight=0.0, agnostic_ex=False, angle_weight=1, arch='multiagentdla_34', aug_ddd=0.5, aug_rot=0, batch_size=32, cat_spec_wh=False, center_thresh=0.1, chunk_sizes=[32], comm_thre=0.0, coord='Global', data_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data', dataset='multiagent_airsim_camera', debug=0, debug_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug', debugger_theme='white', demo='', dense_hp=False, dense_wh=False, dep_weight=1, depth_mode='Unique', depth_weight=1.0, dim_weight=1, down_ratio=4, eval_oracle_dep=False, eval_oracle_hm=False, eval_oracle_hmhp=False, eval_oracle_hp_offset=False, eval_oracle_kps=False, eval_oracle_offset=False, eval_oracle_wh=False, exp_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det', exp_id='PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', feat_mode='inter', feat_shape=[96, 192], fix_res=True, flip=0.5, flip_test=False, gpu_chunk_size=None, gpus=[0], gpus_str='0', head_conv=256, heads={'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}, hide_data_time=False, hm_hp=True, hm_hp_weight=1, hm_weight=1, hp_weight=1, input_dir='', input_h=448, input_res=800, input_w=800, keep_res=False, kitti_split='3dop', load_model='../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_best.pth', lr=0.000125, lr_step=[90, 120], map_scale=1.0, master_batch_size=32, mean=array([[[0.583756 , 0.5439937, 0.4701515]]], dtype=float32), message_mode='Max', metric='loss', mse_loss=False, nms=False, no_color_aug=False, norm_wh=False, not_cuda_benchmark=False, not_hm_hp=False, not_prefetch_test=False, not_rand_crop=False, not_reg_bbox=False, not_reg_hp_offset=False, not_reg_offset=False, num_agents=10, num_classes=1, num_epochs=140, num_iters=-1, num_stacks=1, num_workers=4, off_weight=1, output_h=112, output_res=200, output_w=200, pad=31, peak_thresh=0.2, polygon=True, print_iter=0, real=False, rect_mask=False, reg_bbox=True, reg_hp_offset=True, reg_loss='l1', reg_offset=True, resume=False, root_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..', rot_weight=1, rotate=0, round=1, save_all=False, save_dir='/GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', scale=0.4, scores_thresh=0.1, seed=317, shift=0.1, sigma=0.0, std=array([[[0.2586951 , 0.24342069, 0.23500773]]], dtype=float32), task='multiagent_det', test=False, test_scales=[1.0], train_mode='detector', trainval=False, trans_layer=[0], uav_height=[40], val_intervals=5, vis_thresh=0.3, vis_weight_mats=False, warp_mode='HW', wh_weight=0.1, with_occluded=True)
+Message mode: Max
+==> initializing multiagent airsim_camera val data.
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_sample_seenbox.pkl
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_global_crop_allbox.json
+/GPFS/public/CoPerception_UAVs/town3_10agent/multiagent_annotations/Collaboration_MultiAgent/40_val_instances_allbox.json
+Loaded val 64 samples
+Creating model...
+Message mode: Max
+Trans_layer:  [0]
+Coord:  Global
+loaded ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_best.pth, epoch 35
+#################### comm_rate: 0.000000s) #################### 
+######################################################
+################# BEV Object Detection ###############
+######################################################
+####################### IOU AVG ####################### 
+AP@0.50: 0.9204
+AP@0.55: 0.9047
+AP@0.60: 0.8788
+AP@0.65: 0.8402
+AP@0.70: 0.7650
+AP@0.75: 0.6365
+AP@0.80: 0.4422
+AP@0.85: 0.1901
+AP@0.90: 0.0202
+AP@0.95: 0.0003
+AP@0.5:0.95: 0.5598

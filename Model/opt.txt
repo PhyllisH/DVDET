@@ -1,0 +1,126 @@
+==> torch version: 1.7.0+cu110
+==> cudnn version: 8004
+==> Cmd:
+['multiagent_test.py', 'multiagent_det', '--exp_id', 'PerfectDet_Agent10_AllAltitude_Random_Max_Repeat', '--load_model', '../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_120.pth', '--gpus', '0', '--coord=Global', '--uav_height=40', '--feat_mode=inter', '--polygon', '--map_scale=1.0', '--warp_mode=HW', '--depth_mode=Unique', '--message_mode=Max', '--trans_layer=0', '--round=1', '--comm_thre=0', '--with_occluded']
+==> Opt:
+  K: 100
+  aggr_weight: 0.0
+  agnostic_ex: False
+  angle_weight: 1
+  arch: multiagentdla_34
+  aug_ddd: 0.5
+  aug_rot: 0
+  batch_size: 32
+  cat_spec_wh: False
+  center_thresh: 0.1
+  chunk_sizes: [32]
+  comm_thre: 0.0
+  coord: Global
+  data_dir: /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../data
+  dataset: multiagent_airsim_camera
+  debug: 0
+  debug_dir: /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/debug
+  debugger_theme: white
+  demo: 
+  dense_hp: False
+  dense_wh: False
+  dep_weight: 1
+  depth_mode: Unique
+  depth_weight: 1.0
+  dim_weight: 1
+  down_ratio: 4
+  eval_oracle_dep: False
+  eval_oracle_hm: False
+  eval_oracle_hmhp: False
+  eval_oracle_hp_offset: False
+  eval_oracle_kps: False
+  eval_oracle_offset: False
+  eval_oracle_wh: False
+  exp_dir: /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det
+  exp_id: PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+  feat_mode: inter
+  feat_shape: [96, 192]
+  fix_res: True
+  flip: 0.5
+  flip_test: False
+  gpu_chunk_size: None
+  gpus: [0]
+  gpus_str: 0
+  head_conv: 256
+  heads: {'hm': 1, 'wh': 2, 'reg': 2, 'angle': 2}
+  hide_data_time: False
+  hm_hp: True
+  hm_hp_weight: 1
+  hm_weight: 1
+  hp_weight: 1
+  input_dir: 
+  input_h: 448
+  input_res: 800
+  input_w: 800
+  keep_res: False
+  kitti_split: 3dop
+  load_model: ../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat/model_120.pth
+  lr: 0.000125
+  lr_step: [90, 120]
+  map_scale: 1.0
+  master_batch_size: 32
+  mean: [[[0.583756  0.5439937 0.4701515]]]
+  message_mode: Max
+  metric: loss
+  mse_loss: False
+  nms: False
+  no_color_aug: False
+  norm_wh: False
+  not_cuda_benchmark: False
+  not_hm_hp: False
+  not_prefetch_test: False
+  not_rand_crop: False
+  not_reg_bbox: False
+  not_reg_hp_offset: False
+  not_reg_offset: False
+  num_agents: 10
+  num_classes: 1
+  num_epochs: 140
+  num_iters: -1
+  num_stacks: 1
+  num_workers: 4
+  off_weight: 1
+  output_h: 112
+  output_res: 200
+  output_w: 200
+  pad: 31
+  peak_thresh: 0.2
+  polygon: True
+  print_iter: 0
+  real: False
+  rect_mask: False
+  reg_bbox: True
+  reg_hp_offset: True
+  reg_loss: l1
+  reg_offset: True
+  resume: False
+  root_dir: /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../..
+  rot_weight: 1
+  rotate: 0
+  round: 1
+  save_all: False
+  save_dir: /GPFS/data/yhu/code/BEV_Det/CoDet/src/lib/../../exp/multiagent_det/PerfectDet_Agent10_AllAltitude_Random_Max_Repeat
+  scale: 0.4
+  scores_thresh: 0.1
+  seed: 317
+  shift: 0.1
+  sigma: 0.0
+  std: [[[0.2586951  0.24342069 0.23500773]]]
+  task: multiagent_det
+  test: False
+  test_scales: [1.0]
+  train_mode: detector
+  trainval: False
+  trans_layer: [0]
+  uav_height: [40]
+  val_intervals: 5
+  vis_thresh: 0.3
+  vis_weight_mats: False
+  warp_mode: HW
+  wh_weight: 0.1
+  with_occluded: True
